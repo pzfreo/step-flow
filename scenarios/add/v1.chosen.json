@@ -1,0 +1,29 @@
+{
+  "part.material": "Aluminium 6082-T6",
+  "part.process": "machined",
+  "part.general_tolerance": "ISO 2768-m",
+  "part.locating": "position tolerances",
+  "part.surface_finish": "Ra 3.2",
+  "part.coating": "None (as machined)",
+  "part.heat_treatment": "None",
+  "part.edges": "Break sharp edges 0.2 max",
+  "part.notes": [],
+  "datum.A": [
+    4
+  ],
+  "datum.A.flatness": "0.05",
+  "datum.B": [
+    1
+  ],
+  "datum.B.control": "none",
+  "datum.C": [
+    0
+  ],
+  "datum.C.control": "none",
+  "hole.function:holes:6": "fit:H7",
+  "hole.position:holes:6": "0.05",
+  "hole.function:holes:7": "clearance",
+  "hole.position:holes:7": "0.5",
+  "hole.function:hole_patterns.set:8.9": "clearance",
+  "hole.position:hole_patterns.set:8.9": "0.2"
+}

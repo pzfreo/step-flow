@@ -1,0 +1,18 @@
+{
+  "schema": "draftwright.spec/3",
+  "sheet": {
+    "title": {
+      "title": "SYMMETRIC PLATE",
+      "number": "SF-002",
+      "material": "Aluminium 6082-T6"
+    }
+  },
+  "dimensions": {
+    "d:f:hole:f6/bore.diameter": {
+      "place": {
+        "view": "plan",
+        "side": "above"
+      }
+    }
+  }
+}
