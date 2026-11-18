@@ -1,0 +1,22 @@
+[project]
+name = "step-flow"
+version = "0.1.0"
+description = "A geometry change carried through as a build: STEP -> PMI -> drawing, with one verdict"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+# Exact pins: tools.lock is the record step-flow checks at run time.
+dependencies = ["specify-core==0.1.18", "draftwright==0.6.0"]
+
+[project.optional-dependencies]
+scenarios = ["build123d==0.13.0"]
+
+[project.scripts]
+step-flow = "step_flow.cli:main"
+step-flow-harness = "step_flow.harness:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["step_flow"]
