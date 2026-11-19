@@ -98,7 +98,7 @@
   "hole.position:holes:7": "0.5",
   "part.coating": "None (as machined)",
   "part.edges": "Break sharp edges 0.2 max",
-  "part.general_tolerance": "ISO 2768-m",
+  "part.general_tolerance": "ISO 2768-f",
   "part.heat_treatment": "None",
   "part.locating": "position tolerances",
   "part.material": "Aluminium 6082-T6",
