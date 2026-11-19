@@ -1,0 +1,147 @@
+name: step-flow
+
+on:
+  pull_request:
+    paths:
+      - demo/**
+      - .github/workflows/step-flow.yml
+
+# A PR that changes a part's STEP (demo/<part>/part.step), or its answers or Spec, is carried through STEP -> PMI -> drawing against
+# the STEP, answers and Spec on the PR's base branch. The results are committed back to the PR branch, one
+# comment is posted (and updated on every run), and a check reports ok / needs input / problems.
+# PRs from forks are checked only: the token cannot push to a fork or write to the PR.
+
+concurrency:
+  group: step-flow-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  step-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write        # commit the results to the PR branch
+      pull-requests: write   # the comment
+      checks: write          # the check run
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      BASE: ${{ github.event.pull_request.base.sha }}
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The branch itself, not the merge commit, so the results can be committed back to it.
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - run: git cat-file -e "$BASE^{commit}" || git fetch --no-tags "$GITHUB_SERVER_URL/$REPO" "$BASE"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('tools.lock') }}
+      - name: Install the pinned tools
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          # The released versions in tools.lock (build123d there is for scenario generation only).
+          grep -E '^(specify-core|draftwright)==' tools.lock > "$RUNNER_TEMP/tools.txt"
+          "$RUNNER_TEMP/venv/bin/pip" install -r "$RUNNER_TEMP/tools.txt"
+          "$RUNNER_TEMP/venv/bin/pip" install --no-deps .
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Run step-flow on each changed part
+        run: |
+          set -uo pipefail
+          mkdir -p out
+          # Parts changed by the PR: demo/<part>/part.step (the written part.pmi.step is not a source).
+          for step in $(git diff --name-only --diff-filter=AM "$BASE"...HEAD -- 'demo/*/part.step'); do
+            dir=$(dirname "$step"); part=$(basename "$dir"); work="$RUNNER_TEMP/old/$part"; o="out/$part"
+            mkdir -p "$work" "$o"
+            if ! git show "$BASE:$dir/part.step" > "$work/old.step" 2>/dev/null \
+               || ! git show "$BASE:$dir/part.answers.json" > "$work/old.answers.json" 2>/dev/null; then
+              echo "No STEP and answers.json for this part on the base branch, so there is nothing to compare it with. Add them to the base branch first." > "$o/note.txt"
+              continue
+            fi
+            args=("$work/old.step" "$step" --answers "$work/old.answers.json" -o "$o")
+            if git show "$BASE:$dir/part.spec.json" > "$work/part.spec.json" 2>/dev/null; then args+=(--spec "$work/part.spec.json"); fi
+            # A person's answers: part.answers.json on the branch, when it differs from the base's.
+            if [ -f "$dir/part.answers.json" ] && ! cmp -s "$dir/part.answers.json" "$work/old.answers.json"; then
+              args+=(--new-answers "$dir/part.answers.json")
+            fi
+            [ -f "$dir/part.accepted.json" ] && args+=(--accepted "$dir/part.accepted.json")
+            # Exit 1 is "problems", 2 a tool failure: both are in verdict.json, so the job goes on.
+            step-flow "${args[@]}" || echo "step-flow exited $? for $part"
+          done
+          ls out
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: step-flow
+          path: out/
+
+      - name: Commit the results to the PR branch
+        id: commit
+        if: env.SAME_REPO == 'true'
+        run: |
+          set -euo pipefail
+          for o in out/*/; do
+            part=$(basename "$o"); dir="demo/$part"
+            [ -f "$o/verdict.json" ] || continue
+            # What the new revision needs next to its STEP: PMI'd STEP, answers, carried Spec, drawing.
+            copy() { [ -f "$o/$1" ] && cp "$o/$1" "$dir/$2" || true; }
+            copy write/new.pmi.step part.pmi.step
+            copy diff/answers.json part.answers.json
+            copy draw/diff/spec.json part.spec.json
+            copy draw/new.pdf part.pdf
+            copy draw/new.svg part.svg
+            copy draw/diff/changes.svg part.changes.svg
+            git add "$dir"
+          done
+          if git diff --cached --quiet; then echo "nothing to commit"; echo "committed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "step-flow: PMI, answers and drawing for the changed part"
+          git push
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Render the comment and check
+        id: render
+        run: |
+          set -euo pipefail
+          # Links to the committed drawings use the branch head, which is the commit just pushed (if any).
+          python3 -m step_flow.github out --repo "$REPO" --base-sha "$BASE" --head-sha "$(git rev-parse HEAD)" \
+            --run-url "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" \
+            $([ "$SAME_REPO" = true ] && echo --committed)
+          cat out/comment.md >> "$GITHUB_STEP_SUMMARY"
+          echo "conclusion=$(python3 -c 'import json;print(json.load(open("out/check.json"))["conclusion"])')" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update the one comment
+        if: env.SAME_REPO == 'true'
+        run: |
+          set -euo pipefail
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+                 --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- step-flow -->"))) | .id' | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@out/comment.md > /dev/null
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@out/comment.md > /dev/null
+          fi
+
+      - name: Set the check
+        if: env.SAME_REPO == 'true'
+        run: |
+          set -euo pipefail
+          # success = ok, neutral = decide ("needs input"), failure = problems.
+          jq -n --arg sha "$(git rev-parse HEAD)" --slurpfile c out/check.json '{
+            name: "step-flow", head_sha: $sha, status: "completed", conclusion: $c[0].conclusion,
+            output: {title: $c[0].title, summary: $c[0].summary}}' \
+            | gh api "repos/$REPO/check-runs" --input - > /dev/null
+
+      - name: Fail a fork's PR on problems
+        if: env.SAME_REPO != 'true' && steps.render.outputs.conclusion == 'failure'
+        run: exit 1

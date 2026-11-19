@@ -68,6 +68,48 @@ def stage_diff(r, old, new, answers, out):
                    features=report.get("features", []), migrated=report.get("migrated", [])), report
 
 
+# --- answering a decision -----------------------------------------------------------------------
+
+def resolve(stage, out, person_answers=None, accepted=()):
+    """Apply what a person decided to the diff stage, so the next run re-checks it.
+
+    - ``person_answers``: an answers file edited in the PR. It counts only when it is stamped for the new
+      revision (its ``_specify.evidence`` equals the carried answers'), i.e. it is the file step-flow committed
+      back, not main's. Its answers replace the carried ones; an item about a question it now answers is closed.
+    - ``accepted``: requirement ids the person has accepted as dropped (an orphaned requirement); closed.
+
+    The carried file is kept as ``diff/carried.answers.json``. Nothing is closed by being absent: a person must
+    answer or list the id, so committing step-flow's own output back never turns a ``decide`` into ``ok``.
+    """
+    closed = {}
+    carried_path = out / "diff" / "answers.json"
+    if person_answers:
+        carried, mine = load_json(carried_path), load_json(person_answers)
+        if carried.get("_specify", {}).get("evidence") == mine.get("_specify", {}).get("evidence"):
+            dump_json(carried, out / "diff" / "carried.answers.json")
+            for k, v in mine.items():
+                if not k.startswith("_") and carried.get(k) != v:
+                    carried[k] = v
+                    closed[k] = "answered in answers.json"
+            unresolved = carried.get("_specify", {}).get("unresolved", {})
+            for k in [k for k in unresolved if k in closed]:
+                del unresolved[k]
+            dump_json(carried, carried_path)
+    for a in accepted:
+        closed.setdefault(a, "accepted in accepted.json")
+    if not closed:
+        return stage
+    kept, notes = [], list(stage["notes"])
+    for i in stage["items"]:
+        if i.get("kind", "").startswith(("requirement_", "carry_blocked")) and i.get("id") in closed:
+            notes.append({"kind": "decided", "id": i["id"], "what": f"{i['what']} -- {closed[i['id']]}",
+                          "where": i["where"]})
+        else:
+            kept.append(i)
+    stage = dict(stage, items=kept, notes=notes, verdict=V.item_verdict(kept))
+    return stage
+
+
 # --- 2. validate ---------------------------------------------------------------------------------
 
 def stage_validate(r, new, out):
@@ -292,7 +334,7 @@ def stage_lint(out):
 
 # --- the chain -----------------------------------------------------------------------------------
 
-def run(old, new, answers, out, spec=None, allow_unpinned=False):
+def run(old, new, answers, out, spec=None, allow_unpinned=False, person_answers=None, accepted=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     old, new, answers = Path(old).resolve(), Path(new).resolve(), Path(answers).resolve()
@@ -302,6 +344,8 @@ def run(old, new, answers, out, spec=None, allow_unpinned=False):
     try:
         tools = check_versions(allow_unpinned)
         st, report = stage_diff(r, old, new, answers, out)
+        if report is not None:
+            st = resolve(st, out, person_answers, load_json(accepted) if accepted else ())
         stages.append(st)
         if report is None:
             stages += [V.skipped(s, "the diff failed") for s in ("validate", "write", "draw", "lint")]
