@@ -37,7 +37,8 @@ def actions(same_repo, overall):
             "fail_job": (not same_repo) and overall == V.PROBLEMS}
 
 
-def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=True, has_before=True):
+def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=True, has_before=True,
+                  has_changes=True):
     """Before (main's committed drawing), after and changes. After is the committed file on the PR branch;
     for a fork, which cannot be committed to, the run's artifacts."""
     blob = f"https://github.com/{repo}/blob"
@@ -49,6 +50,8 @@ def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=
         links["changes"] = f"{blob}/{head_sha}/demo/{part}/{FILES['changes']}"
     else:
         links["after"] = links["changes"] = run_url  # a fork's PR is not committed to: see the run's artifacts
+    if not has_changes:
+        del links["changes"]
     return links
 
 
@@ -189,7 +192,8 @@ def main(argv=None):
             result = json.loads(vf.read_text())
             links = drawing_links(d.name, a.repo, a.base_sha, a.head_sha, a.committed, a.run_url,
                                   has_after="new_drawing_pdf" in result.get("outputs", {}),
-                                  has_before=result.get("mode") != "first_build")
+                                  has_before=result.get("mode") != "first_build",
+                                  has_changes=result.get("mode") != "first_build")
             parts.append((d.name, result, links, ""))
         else:
             note = (d / "note.txt").read_text().strip() if (d / "note.txt").exists() else "step-flow did not finish."
