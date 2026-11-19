@@ -113,8 +113,8 @@ class State(unittest.TestCase):
     def test_first_build_has_no_before_drawing_and_says_nothing_is_carried(self):
         r = result("decide", [ITEM, dict(ITEM, stage="write")])
         r["mode"] = "first_build"
-        links = G.drawing_links("new", "o/r", "B", "H", True, "https://run", has_before=False)
-        self.assertEqual(sorted(links), ["after", "changes"])
+        links = G.drawing_links("new", "o/r", "B", "H", True, "https://run", has_before=False, has_changes=False)
+        self.assertEqual(sorted(links), ["after"])
         md, overall = G.render([("new", r, links, "")])
         self.assertEqual(overall, "decide")
         self.assertIn("first build", md)
