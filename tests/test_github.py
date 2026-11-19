@@ -48,7 +48,7 @@ class Render(unittest.TestCase):
         md, overall = G.render([("plate", result("decide", [ITEM]), LINKS, "")])
         self.assertEqual(overall, "decide")
         self.assertEqual(sum(1 for l in md.splitlines() if l.startswith("- ") and ITEM["id"] in l), 1)
-        self.assertIn("**Needs a decision:**", md)
+        self.assertIn("**Needs a decision** (1):", md)
         self.assertIn("To answer", md)
 
     def test_problems_overall_is_the_worst_part(self):
@@ -77,6 +77,79 @@ class Render(unittest.TestCase):
         self.assertEqual(fork["after"], "https://run")
         self.assertEqual(list(G.drawing_links("plate", "o/r", "B", "H", True, "https://run", has_after=False)),
                          ["before"])
+
+
+FEATURE = {"class": "orphaned", "what": "Ø8 × 10 through hole", "at": [80.0, 15.0, 10.0]}
+MOVED = {"class": "adapted", "what": "Ø8 hole", "at": [80, 15, 10],
+         "changes": {"position": {"old": [80.0, 15.0], "new": [75.0, 15.0]}}}
+
+
+class State(unittest.TestCase):
+    def test_what_changed_is_built_from_features_not_from_specifys_sentence(self):
+        r = result("decide", [ITEM])
+        r["stages"][0]["features"] = [FEATURE, MOVED]
+        r["stages"][0]["summary"] = "1 hole removed. A decision is needed: 2 requirements could not be applied."
+        lines = G.what_changed(r)
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("removed:"))
+        self.assertIn("→", lines[1])
+        md, _ = G.render([("plate", r, LINKS, "")])
+        before, _, details = md.partition("<details>")
+        self.assertNotIn("A decision is needed", before)       # only in the folded, verbatim report
+        self.assertIn("A decision is needed", details)
+
+    def test_decided_items_leave_the_decision_list(self):
+        r = result("ok", notes=[{"kind": "decided", "what": "x -- accepted in accepted.json"}])
+        md, overall = G.render([("plate", r, LINKS, "")])
+        self.assertEqual(overall, "ok")
+        self.assertIn("**Needs a decision:** nothing.", md)
+        self.assertIn("1 decided by you", md)
+
+    def test_spec_edited_on_the_branch_is_stated(self):
+        r = result("ok", notes=[{"kind": "spec_decided", "what": "w"}])
+        md, _ = G.render([("plate", r, LINKS, "")])
+        self.assertIn("**Spec:**", md)
+
+    def test_first_build_has_no_before_drawing_and_says_nothing_is_carried(self):
+        r = result("decide", [ITEM, dict(ITEM, stage="write")])
+        r["mode"] = "first_build"
+        links = G.drawing_links("new", "o/r", "B", "H", True, "https://run", has_before=False)
+        self.assertEqual(sorted(links), ["after", "changes"])
+        md, overall = G.render([("new", r, links, "")])
+        self.assertEqual(overall, "decide")
+        self.assertIn("first build", md)
+        self.assertNotIn("[before]", md)
+        self.assertEqual(sum(1 for l in md.splitlines() if ITEM["id"] in l), 1)  # one line per id
+
+    def test_a_long_list_folds(self):
+        items = [dict(ITEM, id=f"q{n}") for n in range(15)]
+        md, _ = G.render([("new", result("decide", items), LINKS, "")])
+        self.assertIn("**Needs a decision** (15):", md)
+        self.assertIn("<summary>5 more</summary>", md)
+
+
+class Fork(unittest.TestCase):
+    """A PR from a fork gets a read-only token: checked only, nothing is committed, posted or set."""
+
+    def test_fork_is_check_only(self):
+        for overall in ("ok", "decide"):
+            self.assertEqual(G.actions(False, overall),
+                             {"commit_back": False, "comment": False, "check": False, "fail_job": False})
+        self.assertTrue(G.actions(False, "problems")["fail_job"])
+
+    def test_same_repo_commits_comments_and_checks_and_never_fails_the_job(self):
+        for overall in ("ok", "decide", "problems"):
+            self.assertEqual(G.actions(True, overall),
+                             {"commit_back": True, "comment": True, "check": True, "fail_job": False})
+
+    def test_main_writes_the_actions_for_a_fork(self):
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / "plate").mkdir()
+            (Path(t) / "plate" / "verdict.json").write_text(json.dumps(result("problems", [dict(ITEM, needs="problems")])))
+            G.main([t, "--repo", "o/r", "--base-sha", "B", "--head-sha", "H", "--run-url", "https://run", "--fork"])
+            check = json.loads((Path(t) / "check.json").read_text())
+            self.assertEqual(check["actions"], G.actions(False, "problems"))
+            self.assertNotIn("blob/H", check["summary"])   # nothing was committed: links go to the run
 
 
 class Main(unittest.TestCase):

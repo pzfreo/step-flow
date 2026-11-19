@@ -17,6 +17,7 @@ ICON = {V.OK: "✅", V.DECIDE: "⚠️", V.PROBLEMS: "❌"}
 # A check run's conclusion for each overall verdict: decide is neutral ("needs input").
 CONCLUSION = {V.OK: "success", V.DECIDE: "neutral", V.PROBLEMS: "failure"}
 TITLE = {V.OK: "step-flow: ok", V.DECIDE: "step-flow: needs input", V.PROBLEMS: "step-flow: problems"}
+LIST_SHOWN = 10  # decisions listed before the rest fold away
 FILES = {"after": "part.pdf", "changes": "part.changes.svg"}
 
 
@@ -29,11 +30,18 @@ def combine(verdicts):
     return V.worst(verdicts) or V.PROBLEMS
 
 
-def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=True):
+def actions(same_repo, overall):
+    """What the workflow may do after a run. A fork's PR gets a read-only token and cannot be pushed to, so
+    it is checked only: no commit-back, no comment, no check run; the job itself fails on ``problems``."""
+    return {"commit_back": same_repo, "comment": same_repo, "check": same_repo,
+            "fail_job": (not same_repo) and overall == V.PROBLEMS}
+
+
+def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=True, has_before=True):
     """Before (main's committed drawing), after and changes. After is the committed file on the PR branch;
     for a fork, which cannot be committed to, the run's artifacts."""
     blob = f"https://github.com/{repo}/blob"
-    links = {"before": f"{blob}/{base_sha}/demo/{part}/part.pdf"}
+    links = {"before": f"{blob}/{base_sha}/demo/{part}/part.pdf"} if has_before else {}
     if not has_after:
         return {"before": links["before"]}
     if committed:
@@ -48,6 +56,30 @@ def _notes(result, kind):
     return [n for s in result["stages"] for n in s.get("notes", []) if n.get("kind") == kind]
 
 
+CLASS = {"orphaned": "removed", "adapted": "changed", "matched": "unchanged", "added": "added", "new": "added"}
+
+
+def _value(v):
+    return "(" + ", ".join(f"{x:g}" if isinstance(x, (int, float)) else str(x) for x in v) + ")" \
+        if isinstance(v, list) else str(v)
+
+
+def what_changed(result):
+    """Lines saying what changed, built from the diff stage's features (structured, from Specify's report), so
+    the text follows step-flow's state. Specify's own summary sentence is kept verbatim in the comment's
+    details, never edited."""
+    diff = next((s for s in result["stages"] if s["stage"] == "diff"), {})
+    lines = []
+    for f in diff.get("features", []):
+        cls = CLASS.get(f.get("class"), f.get("class") or "changed")
+        if cls == "unchanged":
+            continue
+        line = f"{cls}: {f.get('what')} at {_value(f.get('at'))}"
+        moves = [f"{k} {_value(c.get('old'))} → {_value(c.get('new'))}" for k, c in (f.get("changes") or {}).items()]
+        lines.append(line + (" (" + "; ".join(moves) + ")" if moves else ""))
+    return lines
+
+
 def render_part(part, result, links):
     """Markdown for one part: verdict, what changed, carried, decisions, to check, drawings."""
     overall = result["overall"]
@@ -56,8 +88,16 @@ def render_part(part, result, links):
     out.append(" → ".join(f"{s['stage']} {ICON.get(s['verdict'], '⏭️')}" for s in result["stages"]))
     out.append("")
     diff = stages.get("diff") or {}
-    if diff.get("summary"):
-        out += [f"**What changed:** {diff['summary']}", ""]
+    if result.get("mode") == "first_build":
+        out += ["**What changed:** new part, first build. Nothing to carry from an earlier revision: every "
+                "requirement is to be specified.", ""]
+    elif diff.get("verdict") is not None:
+        changes = what_changed(result)
+        out += ["**What changed:**" + ("" if changes else " no feature changed.")]
+        out += [f"- {c}" for c in changes]
+        out.append("")
+        if diff.get("summary"):
+            out += ["<details><summary>Specify's report</summary>", "", diff["summary"], "", "</details>", ""]
     if diff.get("verdict") is not None:
         decided = _notes(result, "decided")
         line = (f"**Carried:** requirements were carried to the new geometry by Specify "
@@ -69,11 +109,24 @@ def render_part(part, result, links):
             out.append(f"- decided: {n['what']}")
         if decided:
             out.append("")
+    specs = _notes(result, "spec_decided")
+    if specs:
+        out += ["**Spec:** the Spec edited on this branch is used for the new drawing.", ""]
     if result["decisions"]:
         label = "Problems and decisions" if overall == V.PROBLEMS else "Needs a decision"
-        out.append(f"**{label}:**")
+        # One line per id: validate and write both name an unanswered question.
+        seen, lines = set(), []
         for i in result["decisions"]:
-            out.append(f"- {ICON[i['needs']]} [{i['stage']}] {i['what']}")
+            if i.get("id") in seen:
+                continue
+            seen.add(i.get("id"))
+            lines.append(f"- {ICON[i['needs']]} [{i['stage']}] {i['what']}")
+        out.append(f"**{label}** ({len(lines)}):")
+        out += lines[:LIST_SHOWN]
+        if len(lines) > LIST_SHOWN:
+            out += ["", f"<details><summary>{len(lines) - LIST_SHOWN} more</summary>", ""]
+            out += lines[LIST_SHOWN:]
+            out += ["", "</details>"]
         out.append("")
     else:
         out += ["**Needs a decision:** nothing.", ""]
@@ -111,8 +164,9 @@ def render(parts, how_to=True):
     overall = combine(verdicts) if verdicts else V.OK
     head = [f"## step-flow: {ICON[overall]} `{overall}`", ""]
     if overall == V.DECIDE and how_to:
-        body.append("To answer: edit `part.answers.json` (answer the question) or `part.accepted.json` (list a "
-                    "requirement id to drop) on this branch and push. The next run re-checks. "
+        body.append("To answer: edit `part.answers.json` (answer the question), `part.accepted.json` (list a "
+                    "requirement id to drop) or `part.spec.json` (a drawing Spec entry) on this branch and push. "
+                    "The next run re-checks. "
                     "See the README, \"GitHub flow\".")
     return "\n".join(head + body).rstrip() + "\n", overall
 
@@ -124,6 +178,7 @@ def main(argv=None):
     ap.add_argument("--base-sha", required=True)
     ap.add_argument("--head-sha", required=True)
     ap.add_argument("--run-url", required=True)
+    ap.add_argument("--fork", action="store_true", help="the PR is from a fork: check only")
     ap.add_argument("--committed", action="store_true", help="the results were committed to the PR branch")
     a = ap.parse_args(argv)
     root = Path(a.root)
@@ -133,7 +188,8 @@ def main(argv=None):
         if vf.exists():
             result = json.loads(vf.read_text())
             links = drawing_links(d.name, a.repo, a.base_sha, a.head_sha, a.committed, a.run_url,
-                                  has_after="new_drawing_pdf" in result.get("outputs", {}))
+                                  has_after="new_drawing_pdf" in result.get("outputs", {}),
+                                  has_before=result.get("mode") != "first_build")
             parts.append((d.name, result, links, ""))
         else:
             note = (d / "note.txt").read_text().strip() if (d / "note.txt").exists() else "step-flow did not finish."
@@ -144,7 +200,8 @@ def main(argv=None):
     markdown, overall = render(parts)
     (root / "comment.md").write_text(MARKER + "\n" + markdown)
     (root / "check.json").write_text(json.dumps({
-        "conclusion": conclusion(overall), "title": TITLE[overall], "summary": markdown}, ensure_ascii=False))
+        "conclusion": conclusion(overall), "title": TITLE[overall], "summary": markdown,
+        "actions": actions(not a.fork, overall)}, ensure_ascii=False))
     print(overall)
     return 0
 
