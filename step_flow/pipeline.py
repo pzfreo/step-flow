@@ -19,9 +19,11 @@ SPEC_CARRIED = {"renamed", "carried", "unchanged", "adapted"}
 
 
 def _tool_failure(runner, what):
-    last = runner.log[-1]
+    failed = [e for e in runner.log if e["rc"] != 0]
+    last = (failed or runner.log)[-1]
     return {"kind": "tool_failure", "id": " ".join(last["cmd"][:2]), "needs": V.PROBLEMS,
-            "what": f"{what}: exit {last['rc']}: {last['stderr'] or '(no message)'}", "where": "commands.json"}
+            "what": f"{what}: `{' '.join(last['cmd'])}` exit {last['rc']}: {last['stderr'] or '(no message)'}",
+            "where": "commands.json"}
 
 
 # --- 1. diff -------------------------------------------------------------------------------------
@@ -117,6 +119,32 @@ def write_one(r, step, answers, d, stem):
     return r.log[-1], report
 
 
+# specify-core's not_written line for a planner dimension given up for an answered requirement.
+RETAINED = re.compile(r"retained answered intent")
+
+
+def readback(r, out, d):
+    """Read the written STEP's PMI back with ``specify-core analyse`` (``resume.answers``) and compare it with
+    the answers carried to the new revision. Independent of the intent Specify reported when writing."""
+    back = d / "new.readback.json"
+    if r.run("specify-core", "analyse", d / "new.pmi.step", "-o", back).returncode != 0:
+        return [_tool_failure(r, "reading the written STEP back failed")]
+    resume = load_json(back).get("resume") or {}
+    got = resume.get("answers") or {}
+    want = {k: v for k, v in load_json(out / "diff" / "answers.json").items() if not k.startswith("_")}
+    items = []
+    for k in sorted(set(want) | set(got)):
+        if want.get(k) != got.get(k):
+            items.append({"kind": "pmi_readback_mismatch", "id": k, "needs": V.PROBLEMS, "revision": "new",
+                          "what": f"{k}: carried {want.get(k)!r}, the written STEP reads back {got.get(k)!r}",
+                          "where": "write/new.readback.json#/resume"})
+    for c in resume.get("conflicts") or []:
+        items.append({"kind": "pmi_readback_conflict", "id": c.get("id"), "needs": V.PROBLEMS, "revision": "new",
+                      "what": f"{c.get('id')}: the written STEP conflicts with the answer ({c})",
+                      "where": "write/new.readback.json#/resume/conflicts"})
+    return items
+
+
 def stage_write(r, old, old_answers, new, out):
     d = out / "write"
     d.mkdir(parents=True, exist_ok=True)
@@ -141,7 +169,15 @@ def stage_write(r, old, old_answers, new, out):
                           "where": "commands.json"})
     else:
         for line in new_report.get("not_written", []):
-            notes.append({"kind": "not_written", "what": line, "where": "write/new.write.json#/not_written"})
+            if RETAINED.search(line):
+                # A shared planner dimension dropped because an answered requirement states the same thing:
+                # the answer is written, so this is a note.
+                notes.append({"kind": "not_written", "what": line, "where": "write/new.write.json#/not_written"})
+            else:
+                items.append({"kind": "not_written", "id": line, "needs": V.DECIDE, "revision": "new",
+                              "what": f"a requirement was not written: {line}",
+                              "where": "write/new.write.json#/not_written"})
+        items += readback(r, out, d)
     return V.stage("write", V.item_verdict(items), items, notes,
                    written=new_report is not None, old_written=old_report is not None)
 
@@ -295,6 +331,11 @@ def run(old, new, answers, out, spec=None, allow_unpinned=False):
         tools = None
         stages.append(V.stage("setup", V.PROBLEMS, [{"kind": "tool_failure", "id": "tools", "needs": V.PROBLEMS,
                                                      "what": str(e), "where": "tools.lock"}]))
+    except Exception as e:  # noqa: BLE001 - any crash is an error verdict with its evidence, never a traceback
+        tools = None
+        stages.append(V.stage("crash", V.PROBLEMS, [{
+            "kind": "tool_failure", "id": "step-flow", "needs": V.PROBLEMS, "where": "commands.json",
+            "what": f"step-flow crashed: {type(e).__name__}: {e}"}]))
     result = {
         "schema": "step-flow.verdict/1",
         "overall": V.overall(stages),

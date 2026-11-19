@@ -84,5 +84,4 @@ spec_edits = ["2× ⌀5 H11 THRU"]
 prints = ["⌀6 H7 THRU", "2× ⌀5 H11 THRU", "⌖ | ⌀0.2Ⓜ | A | B | C"]
 absent = ["⌀8 H11 THRU", "80", "⌖ | ⌀0.5Ⓜ | A | B | C"]
 
-findings = ["F2: specify-core diff's PMI list reports the removed hole's 80 location as the Ø5 hole's 80 → 30 (FINDINGS.md)",
-            "F3: draftwright diff reports 80 → 30 and 30 → 70 for locations that did not change (FINDINGS.md)"]
+findings = ["F3 (draftwright #539): draftwright diff reports 80 → 30 and 30 → 70 for locations that did not change (FINDINGS.md)"]

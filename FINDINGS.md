@@ -7,7 +7,7 @@ root with the pinned venv (`S=.venv/bin/specify-core D=.venv/bin/draftwright`); 
 
 ## F1. Symmetric part: Specify breaks the tie by the file frame and says `ok`
 
-**Status: resolved in specify-core 0.2.0 (#202), scenario truth changed by Paul's decision.** `diff` now
+**Status: resolved in specify-core 0.2.0 (#202), scenario truth changed by Paul's decision.** (The scenario's input was also corrected: Specify takes two equal holes as one pair, so the pair is Ø6 H7, not one H7 hole and one clearance hole.) `diff` now
 reports `frame_tie` ("Matched in the file's frame; a 180° turn about Z fits equally."). The truth is `ok`
 with the tie stated; step-flow carries `frame_tie` as a note and `summary.md` lists it under "Stated tie",
 and `expect.toml` requires it (`stated = ["frame_tie"]`), so a silent `ok` still scores silent-wrong. The
@@ -70,7 +70,7 @@ the carried `answers.json` and the written PMI are right (the harness checks bot
 
 ## F3. `draftwright diff` pairs drawing items by face-numbered IDs: false changes and a false `problems`
 
-**Status: still reproduces on draftwright 0.6.1** (verdict `problems`, 12 annotation changes, the added
+**Status: still reproduces on draftwright 0.6.1; filed as draftwright #539** (verdict `problems`, 12 annotation changes, the added
 problem also listed as resolved; `20 → 30`, `80 → 70`, and the Ø5 locations `removed`). Original finding follows.
 
 **Scenario** `scenarios/reexport` (identical geometry, faces in a different order).
@@ -96,7 +96,7 @@ the same correspondence. step-flow records draftwright's verdict as a note and u
 
 ## F4. Holes sharing a coordinate: Draftwright's plan says one dimension serves both, its lint says not located
 
-**Status: still reproduces on draftwright 0.6.1** (`feature_not_located` for the ⌀8 and the other ⌀5 hole on y,
+**Status: still reproduces on draftwright 0.6.1; filed as draftwright #540** (`feature_not_located` for the ⌀8 and the other ⌀5 hole on y,
 while both plan dimensions say "one dimension serves every feature at this distance"). Original finding follows.
 
 **Any base-plate scenario's old drawing** (holes at (20, 15) and (80, 15); (30, 45) and (70, 45)):

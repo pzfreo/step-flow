@@ -78,4 +78,4 @@ on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
 spec_edits = ["2× ⌀5 H11 THRU"]
 same_as_old = true
 
-findings = ["F3: draftwright diff says problems and 12 changed values for identical geometry (FINDINGS.md)"]
+findings = ["F3 (draftwright #539): draftwright diff says problems and 12 changed values for identical geometry (FINDINGS.md)"]

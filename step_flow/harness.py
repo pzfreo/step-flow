@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import expect as E
 from . import pipeline
-from .tools import Runner, check_versions, dump_json, load_json
+from .tools import Runner, ToolError, check_versions, dump_json, load_json
 
 ROOT = Path(__file__).resolve().parent.parent / "scenarios"
 
@@ -78,7 +78,16 @@ def cmd_run(a):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     tools = check_versions(a.allow_unpinned)
-    results = [run_one(s, out / s.name, a.allow_unpinned) for s in scenarios(a.scenario)]
+    results = []
+    for s in scenarios(a.scenario):
+        try:
+            results.append(run_one(s, out / s.name, a.allow_unpinned))
+        except Exception as e:  # noqa: BLE001 - a crash is an error row, not a lost scorecard
+            row = {"check": "run", "what": "the scenario ran", "category": "error",
+                   "detail": f"{type(e).__name__}: {e}"}
+            results.append({"scenario": s.name, "changed": "", "expected": "?", "got": "error", "stages": {},
+                            "tally": E.tally([row]), "rows": [row], "out": str(out / s.name), "decisions": [],
+                            "findings": []})
     dump_json({"schema": "step-flow.scorecard/1", "tools": tools, "scenarios": results}, out / "scorecard.json")
     (out / "scorecard.md").write_text(scorecard_md(results, tools))
     for r in results:
@@ -174,7 +183,11 @@ def main(argv=None):
         if name == "build":
             p.add_argument("--check", action="store_true", help="regenerate to a temporary directory and compare")
     a = ap.parse_args(argv)
-    return {"run": cmd_run, "build": cmd_build, "answers": cmd_answers}[a.cmd](a)
+    try:
+        return {"run": cmd_run, "build": cmd_build, "answers": cmd_answers}[a.cmd](a)
+    except ToolError as e:
+        print(f"step-flow-harness: error: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

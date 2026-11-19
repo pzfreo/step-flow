@@ -14,6 +14,7 @@ Each expectation scores as one of:
 """
 
 import math
+import re
 import tomllib
 from pathlib import Path
 
@@ -145,6 +146,12 @@ class Run:
         return self._json("write/old.analysis.json")
 
     @property
+    def readback(self):
+        """``resume.answers`` of ``specify-core analyse`` on the written STEP, or None."""
+        back = self._json("write/new.readback.json")
+        return None if back is None else (back.get("resume") or {}).get("answers") or {}
+
+    @property
     def intent(self):
         return self._json("write/new.intent.json")
 
@@ -189,12 +196,13 @@ def score(expect, run):
 
     # The chain's verdict.
     want, got = expect["verdict"], run.result["overall"]
+    # ok < decide < problems. Same: right. Anything reported as ok that is not: silent-wrong. A problem reported
+    # as only a decision understates it: silent-wrong. Reported worse than the truth: unnecessary-ask.
+    rank = {"ok": 0, "decide": 1, "problems": 2}
     if got == want:
         cat = "correct-automatic" if want == "ok" else "correct-ask"
-    elif got == "ok":
+    elif rank.get(got, 2) < rank[want]:
         cat = "silent-wrong"
-    elif want == "ok" or (want == "decide" and got == "problems"):
-        cat = "unnecessary-ask"
     else:
         cat = "unnecessary-ask"
     if any(i.get("kind") == "tool_failure" for i in run.result["decisions"]):
@@ -202,6 +210,15 @@ def score(expect, run):
     row("verdict", f"chain verdict {want}", cat, f"got {got}")
 
     answers, new_a, old_a = run.answers, run.new_analysis, run.old_analysis
+    # Carried requirements are checked on what the written STEP reads back as (independent of Specify's own
+    # intent), when a STEP was written; the read-back must also equal the carried answers.
+    if run.readback is not None:
+        carried_only = {k: v for k, v in (answers or {}).items() if not k.startswith("_")}
+        bad = [i["id"] for i in run.result["decisions"] if i.get("kind", "").startswith("pmi_readback")]
+        row("readback", "the written STEP reads back as the carried answers",
+            "silent-wrong" if bad or run.readback != carried_only else "correct-automatic",
+            ", ".join(bad) or "")
+        answers = dict(run.readback)
 
     # Requirements that must be carried to a feature of the new revision.
     for e in expect.get("carried", []):
@@ -312,7 +329,12 @@ def score(expect, run):
         checks.append(("same_as_old", None))
     if checks:
         new_plan, old_plan = run.plan("new"), run.plan("old")
-        draw_ok = all((run.stage(s) or {}).get("verdict") == "ok" for s in ("draw", "lint"))
+        # Only a draw or lint item about the very value in question may excuse a wrong print.
+        drawn_asks = [i for i in run.result["decisions"] if i["stage"] in ("draw", "lint")]
+
+        def excused(*texts):
+            pats = [re.compile(r"(?<![\w.])" + re.escape(t) + r"(?![\w.]\w)") for t in texts if t]
+            return any(p.search(i.get("what", "") + " " + str(i.get("id", ""))) for i in drawn_asks for p in pats)
         for kind, text in checks:
             what = {"prints": f"drawing prints {text!r}", "absent": f"drawing does not print {text!r}",
                     "spec_edit": f"the Spec's edit still applies to {text!r}",
@@ -336,7 +358,12 @@ def score(expect, run):
             if ok:
                 row("drawing", what, "correct-automatic")
             else:
-                row("drawing", what, "silent-wrong" if draw_ok else "correct-ask", detail or f"prints {labels}")
+                if kind == "same_as_old":
+                    named = sorted(set(a) ^ set(b))
+                else:
+                    named = [text]
+                row("drawing", what, "correct-ask" if excused(*named) else "silent-wrong",
+                    detail or f"prints {labels}")
     return rows
 
 

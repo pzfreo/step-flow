@@ -54,8 +54,13 @@ Rules, decided for M1:
 - **Lint** ignores `info` and `advisory` findings, and compares by (code, message) with Draftwright feature
   IDs' face numbers blanked (`f:hole:f7` → `f:hole:f#`), since faces renumber on any change; a finding that
   occurs more often than before is new. `draftwright diff`'s own verdict is recorded as a note, not used
-  (it pairs items by face-numbered IDs: FINDINGS.md F3). Specify's `frame_tie` is a note and appears in `summary.md`.
-- `not_written` lines from the write are notes.
+  (it pairs items by face-numbered IDs: FINDINGS.md F3, draftwright #539; and a shared dimension that plan says serves two holes while lint says one is not located: F4, draftwright #540). Specify's `frame_tie` is a note and appears in `summary.md`.
+- A `not_written` line from the write is a `decide` item (a requirement was not written), except the planner's
+  "retained answered intent" lines (a shared planner dimension given up for an answered requirement), which are
+  notes.
+- The written STEP is read back with `specify-core analyse` (`resume.answers`) and must equal the carried
+  answers; a difference or a `resume.conflicts` entry is `problems`. The harness checks carried requirements on
+  this read-back, not on Specify's own intent.
 
 Outputs in `OUT/`: `verdict.json` (`overall`, `stages`, `decisions`: every item needing a decision or naming
 a problem, with `where` to look, `outputs`, `tools`), `summary.md` (for a PR comment), `commands.json` (every
@@ -64,7 +69,9 @@ command, exit code and stderr), `diff/` (Specify's report and carried `answers.j
 `diff/` with the carried `spec.json` and `changes.svg`).
 
 **Exit code:** 0 for `ok` and for `decide` (told apart by `overall` in `verdict.json` and the printed
-line), 1 for `problems`, 2 for a tool failure (missing or unpinned tool, crash).
+line), 1 for `problems`, 2 for a tool failure (missing or unpinned tool, a failed tool command, or an
+unexpected crash: the crash is also written to `verdict.json` as a `tool_failure` item). The harness exits 2 for
+a crash or unpinned tool too.
 
 ## The harness
 
@@ -74,6 +81,10 @@ line), 1 for `problems`, 2 for a tool failure (missing or unpinned tool, crash).
 .venv/bin/step-flow-harness answers [--scenario NAME]              # regenerate v1.answers.json
 .venv/bin/python -m unittest discover -s tests -t .                # unit tests
 ```
+
+Chain verdict scoring (ok < decide < problems): equal is correct; a worse verdict than the truth is an
+unnecessary-ask; a better one is silent-wrong (including `problems` reported as only `decide`). A drawing check
+that fails is correct-ask only when a draw or lint item names that very value, never for unrelated asks.
 
 `run` runs the pipeline on each scenario and scores every expectation as **correct-automatic**,
 **correct-ask**, **unnecessary-ask**, **silent-wrong** or **error** (the check could not be made). It exits 1

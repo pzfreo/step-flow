@@ -28,6 +28,7 @@ class FakeRun(E.Run):
     new_analysis = property(lambda self: ANALYSIS)
     old_analysis = property(lambda self: ANALYSIS)
     intent = property(lambda self: self._intent)
+    readback = property(lambda self: None)
 
     def plan(self, which):
         return self._plans.get(which)
@@ -38,6 +39,26 @@ def cats(rows, check):
 
 
 class Scoring(unittest.TestCase):
+    def test_verdict_scoring(self):
+        for want, got, cat in [("ok", "ok", "correct-automatic"), ("decide", "decide", "correct-ask"),
+                               ("problems", "problems", "correct-ask"), ("problems", "decide", "silent-wrong"),
+                               ("problems", "ok", "silent-wrong"), ("decide", "ok", "silent-wrong"),
+                               ("decide", "problems", "unnecessary-ask"), ("ok", "decide", "unnecessary-ask"),
+                               ("ok", "problems", "unnecessary-ask")]:
+            rows = E.score({"verdict": want}, FakeRun({}, overall=got))
+            self.assertEqual(cats(rows, "verdict"), [cat], (want, got))
+
+    def test_wrong_print_excused_only_by_an_ask_about_it(self):
+        exp = {"verdict": "ok", "drawing": {"prints": ["⌀7 H7 THRU"]}}
+        plans = {"new": {"dimensions": [{"id": "d1", "label": "⌀6 H7 THRU"}]}, "old": {"dimensions": []}}
+
+        def drawn(item):
+            return FakeRun({}, plans=plans, decisions=[dict(item, stage="lint", needs="decide")])
+        unrelated = drawn({"id": "x", "what": "readability_x: label overlap on ⌀9 H11 THRU"})
+        self.assertEqual(cats(E.score(exp, unrelated), "drawing"), ["silent-wrong"])
+        related = drawn({"id": "y", "what": "stale: the edit on ⌀7 H7 THRU no longer applies"})
+        self.assertEqual(cats(E.score(exp, related), "drawing"), ["correct-ask"])
+
     def test_stated_tie_required(self):
         exp = {"verdict": "ok", "stated": ["frame_tie"]}
         silent = E.score(exp, FakeRun({}))
@@ -105,8 +126,13 @@ class Scoring(unittest.TestCase):
         stages = [{"stage": s, "verdict": "ok", "items": [], "notes": []} for s in ("diff", "draw", "lint")]
         rows = E.score(exp, FakeRun({}, plans={"new": plan, "old": plan}, stages=stages))
         self.assertEqual(cats(rows, "drawing"), ["silent-wrong", "silent-wrong"])
+        # A lint problem about something else does not excuse the wrong values (review round 1, item 3).
         stages[2]["verdict"] = "problems"
-        rows = E.score(exp, FakeRun({}, overall="problems", plans={"new": plan, "old": plan}, stages=stages))
+        other = [{"stage": "lint", "needs": "problems", "id": "z", "what": "readability: label overlap on ⌀9"}]
+        rows = E.score(exp, FakeRun({}, overall="problems", decisions=other, plans={"new": plan, "old": plan}, stages=stages))
+        self.assertEqual(cats(rows, "drawing"), ["silent-wrong", "silent-wrong"])
+        named = [{"stage": "lint", "needs": "problems", "id": "z", "what": "stale: the dimension 80 became 75"}]
+        rows = E.score(exp, FakeRun({}, overall="problems", decisions=named, plans={"new": plan, "old": plan}, stages=stages))
         self.assertEqual(cats(rows, "drawing"), ["correct-ask", "correct-ask"])
 
     def test_tally(self):

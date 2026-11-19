@@ -17,7 +17,11 @@ def main(argv=None):
     ap.add_argument("-o", "--out", required=True, help="output directory")
     ap.add_argument("--allow-unpinned", action="store_true", help="run tools that differ from tools.lock")
     a = ap.parse_args(argv)
-    result = pipeline.run(a.old, a.new, a.answers, a.out, spec=a.spec, allow_unpinned=a.allow_unpinned)
+    try:
+        result = pipeline.run(a.old, a.new, a.answers, a.out, spec=a.spec, allow_unpinned=a.allow_unpinned)
+    except Exception as e:  # noqa: BLE001 - e.g. an unreadable input before the pipeline starts
+        print(f"step-flow: error: {type(e).__name__}: {e}", file=sys.stderr)
+        return 2
     print(json.dumps({"overall": result["overall"],
                       "stages": {s["stage"]: s["verdict"] for s in result["stages"]},
                       "decisions": len(result["decisions"])}, ensure_ascii=False))
