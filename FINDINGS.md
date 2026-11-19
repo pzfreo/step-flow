@@ -7,7 +7,7 @@ root with the pinned venv (`S=.venv/bin/specify-core D=.venv/bin/draftwright`); 
 
 ## F1. Symmetric part: Specify breaks the tie by the file frame and says `ok`
 
-**Status: resolved in specify-core 0.2.0 (#202), scenario truth changed by Paul's decision.** (The scenario's input was also corrected: Specify takes two equal holes as one pair, so the pair is Ø6 H7, not one H7 hole and one clearance hole.) `diff` now
+**Status: resolved in specify-core 0.2.0 (#202), scenario truth changed by Paul's decision.** `diff` now
 reports `frame_tie` ("Matched in the file's frame; a 180° turn about Z fits equally."). The truth is `ok`
 with the tie stated; step-flow carries `frame_tie` as a note and `summary.md` lists it under "Stated tie",
 and `expect.toml` requires it (`stated = ["frame_tie"]`), so a silent `ok` still scores silent-wrong. The

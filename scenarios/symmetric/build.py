@@ -1,5 +1,5 @@
 """Symmetric: a plate symmetric about its centre with two Ø6 holes at (30, 30) and (70, 30); the one at
-(30, 30) is datum B. Specify takes the two equal holes as one pair, so both are Ø6 H7. In v2 the other hole moves to (75, 30), so v1 maps onto v2 either as it lies
+(30, 30) is datum B (Ø6 H7). In v2 the other hole moves to (75, 30), so v1 maps onto v2 either as it lies
 (the datum hole stays at (30, 30)) or turned 180° about the plate's centre (the datum hole is the one that moved)."""
 import sys
 from pathlib import Path

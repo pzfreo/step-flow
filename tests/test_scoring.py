@@ -48,6 +48,16 @@ class Scoring(unittest.TestCase):
             rows = E.score({"verdict": want}, FakeRun({}, overall=got))
             self.assertEqual(cats(rows, "verdict"), [cat], (want, got))
 
+    def test_a_short_value_is_not_excused_by_a_coordinate(self):
+        plan = {"dimensions": [{"id": "d1", "label": "80", "state": {"kind": "shown"}}]}
+        exp = {"verdict": "ok", "drawing": {"prints": ["30"]}}
+        ask = [{"stage": "lint", "needs": "decide", "id": "f:hole:f3", "what": "overlap near the hole at (30, 30)"}]
+        rows = E.score(exp, FakeRun({}, plans={"new": plan, "old": plan}, decisions=ask))
+        self.assertEqual(cats(rows, "drawing"), ["silent-wrong"])
+        ask[0]["id"] = "d:pmi:dimension.linear.basic:30"
+        rows = E.score(exp, FakeRun({}, plans={"new": plan, "old": plan}, decisions=ask))
+        self.assertEqual(cats(rows, "drawing"), ["correct-ask"])
+
     def test_wrong_print_excused_only_by_an_ask_about_it(self):
         exp = {"verdict": "ok", "drawing": {"prints": ["⌀7 H7 THRU"]}}
         plans = {"new": {"dimensions": [{"id": "d1", "label": "⌀6 H7 THRU"}]}, "old": {"dimensions": []}}
@@ -131,7 +141,7 @@ class Scoring(unittest.TestCase):
         other = [{"stage": "lint", "needs": "problems", "id": "z", "what": "readability: label overlap on ⌀9"}]
         rows = E.score(exp, FakeRun({}, overall="problems", decisions=other, plans={"new": plan, "old": plan}, stages=stages))
         self.assertEqual(cats(rows, "drawing"), ["silent-wrong", "silent-wrong"])
-        named = [{"stage": "lint", "needs": "problems", "id": "z", "what": "stale: the dimension 80 became 75"}]
+        named = [{"stage": "lint", "needs": "problems", "id": "d:pmi:75:80", "what": "stale: the dimension changed"}]
         rows = E.score(exp, FakeRun({}, overall="problems", decisions=named, plans={"new": plan, "old": plan}, stages=stages))
         self.assertEqual(cats(rows, "drawing"), ["correct-ask", "correct-ask"])
 

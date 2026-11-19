@@ -21,6 +21,6 @@
   ],
   "datum.C.control": "none",
   "hole.function:holes:6": "fit:H7",
-  "hole.function:hole_patterns.set:6.7": "fit:H7",
+  "hole.function:hole_patterns.set:6.7": "clearance",
   "hole.position:hole_patterns.set:6.7": "0.1"
 }

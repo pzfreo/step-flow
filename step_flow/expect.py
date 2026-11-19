@@ -333,8 +333,12 @@ def score(expect, run):
         drawn_asks = [i for i in run.result["decisions"] if i["stage"] in ("draw", "lint")]
 
         def excused(*texts):
-            pats = [re.compile(r"(?<![\w.])" + re.escape(t) + r"(?![\w.]\w)") for t in texts if t]
-            return any(p.search(i.get("what", "") + " " + str(i.get("id", ""))) for i in drawn_asks for p in pats)
+            def hit(t, i):
+                # A bare number is a dimension value that also appears in coordinates and sizes in any message,
+                # so it only counts when the item's own id carries it; a longer label counts in the message too.
+                where = str(i.get("id", "")) if re.fullmatch(r"[\d.]+", t) else f"{i.get('what', '')} {i.get('id', '')}"
+                return re.search(r"(?<![\w.])" + re.escape(t) + r"(?![\w]|\.\d)", where) is not None
+            return any(hit(t, i) for i in drawn_asks for t in texts if t)
         for kind, text in checks:
             what = {"prints": f"drawing prints {text!r}", "absent": f"drawing does not print {text!r}",
                     "spec_edit": f"the Spec's edit still applies to {text!r}",

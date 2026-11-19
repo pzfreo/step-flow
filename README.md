@@ -58,9 +58,11 @@ Rules, decided for M1:
 - A `not_written` line from the write is a `decide` item (a requirement was not written), except the planner's
   "retained answered intent" lines (a shared planner dimension given up for an answered requirement), which are
   notes.
-- The written STEP is read back with `specify-core analyse` (`resume.answers`) and must equal the carried
-  answers; a difference or a `resume.conflicts` entry is `problems`. The harness checks carried requirements on
-  this read-back, not on Specify's own intent.
+- Specify reads its own written PMI back: `specify-core analyse` on the written STEP (`resume.answers`) must
+  equal the carried answers, and a difference or a `resume.conflicts` entry is `problems`. This is Specify
+  checking Specify, not an independent reader; the independent reader is Draftwright, whose drawing checks
+  (what the plan prints, the Spec carry, lint) read the PMI from the file. The harness checks carried
+  requirements on the read-back and PMI values on Specify's intent and the drawing's plan.
 
 Outputs in `OUT/`: `verdict.json` (`overall`, `stages`, `decisions`: every item needing a decision or naming
 a problem, with `where` to look, `outputs`, `tools`), `summary.md` (for a PR comment), `commands.json` (every
