@@ -61,20 +61,32 @@ jobs:
           for step in $(git diff --name-only --diff-filter=AM "$BASE"...HEAD -- 'demo/*/part.step'); do
             dir=$(dirname "$step"); part=$(basename "$dir"); work="$RUNNER_TEMP/old/$part"; o="out/$part"
             mkdir -p "$work" "$o"
-            if ! git show "$BASE:$dir/part.step" > "$work/old.step" 2>/dev/null \
-               || ! git show "$BASE:$dir/part.answers.json" > "$work/old.answers.json" 2>/dev/null; then
-              echo "No STEP and answers.json for this part on the base branch, so there is nothing to compare it with. Add them to the base branch first." > "$o/note.txt"
-              continue
+            # A person's answers or Spec: the file on the branch, when it differs from the base's.
+            # A Spec counts as a person's only if it also differs from the one this workflow last committed.
+            person_spec=""
+            if [ -f "$dir/part.spec.json" ] && ! git show "$BASE:$dir/part.spec.json" 2>/dev/null | cmp -s - "$dir/part.spec.json"; then
+              bot=$(git log -1 --author='github-actions\[bot\]' --format=%H "$BASE"..HEAD -- "$dir/part.spec.json")
+              if [ -z "$bot" ] || ! git show "$bot:$dir/part.spec.json" | cmp -s - "$dir/part.spec.json"; then person_spec="$dir/part.spec.json"; fi
             fi
-            args=("$work/old.step" "$step" --answers "$work/old.answers.json" -o "$o")
-            if git show "$BASE:$dir/part.spec.json" > "$work/part.spec.json" 2>/dev/null; then args+=(--spec "$work/part.spec.json"); fi
-            # A person's answers: part.answers.json on the branch, when it differs from the base's.
-            if [ -f "$dir/part.answers.json" ] && ! cmp -s "$dir/part.answers.json" "$work/old.answers.json"; then
-              args+=(--new-answers "$dir/part.answers.json")
+            accepted=(); [ -f "$dir/part.accepted.json" ] && accepted=(--accepted "$dir/part.accepted.json")
+            if git show "$BASE:$dir/part.step" > "$work/old.step" 2>/dev/null \
+               && git show "$BASE:$dir/part.answers.json" > "$work/old.answers.json" 2>/dev/null; then
+              args=("$work/old.step" "$step" --answers "$work/old.answers.json" -o "$o" "${accepted[@]}")
+              if git show "$BASE:$dir/part.spec.json" > "$work/part.spec.json" 2>/dev/null; then args+=(--spec "$work/part.spec.json"); fi
+              if [ -f "$dir/part.answers.json" ] && ! cmp -s "$dir/part.answers.json" "$work/old.answers.json"; then
+                args+=(--new-answers "$dir/part.answers.json")
+              fi
+              [ -n "$person_spec" ] && args+=(--new-spec "$person_spec")
+              cmd=(step-flow "${args[@]}")
+            else
+              # No STEP and answers on the base branch: a first build, nothing to carry.
+              args=("$step" -o "$o")
+              [ -f "$dir/part.answers.json" ] && args+=(--answers "$dir/part.answers.json")
+              [ -f "$dir/part.spec.json" ] && args+=(--spec "$dir/part.spec.json")
+              cmd=(step-flow first-build "${args[@]}")
             fi
-            [ -f "$dir/part.accepted.json" ] && args+=(--accepted "$dir/part.accepted.json")
             # Exit 1 is "problems", 2 a tool failure: both are in verdict.json, so the job goes on.
-            step-flow "${args[@]}" || echo "step-flow exited $? for $part"
+            "${cmd[@]}" || echo "step-flow exited $? for $part"
           done
           ls out
 
@@ -95,8 +107,9 @@ jobs:
             # What the new revision needs next to its STEP: PMI'd STEP, answers, carried Spec, drawing.
             copy() { [ -f "$o/$1" ] && cp "$o/$1" "$dir/$2" || true; }
             copy write/new.pmi.step part.pmi.step
-            copy diff/answers.json part.answers.json
-            copy draw/diff/spec.json part.spec.json
+            # A first build with nothing answered has no answers to commit (an empty {}).
+            [ "$(tr -d ' \n' < "$o/diff/answers.json")" = "{}" ] || copy diff/answers.json part.answers.json
+            copy draw/new.spec.json part.spec.json
             copy draw/new.pdf part.pdf
             copy draw/new.svg part.svg
             copy draw/diff/changes.svg part.changes.svg
@@ -116,12 +129,13 @@ jobs:
           # Links to the committed drawings use the branch head, which is the commit just pushed (if any).
           python3 -m step_flow.github out --repo "$REPO" --base-sha "$BASE" --head-sha "$(git rev-parse HEAD)" \
             --run-url "$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" \
-            $([ "$SAME_REPO" = true ] && echo --committed)
+            $([ "$SAME_REPO" = true ] && echo --committed || echo --fork)
           cat out/comment.md >> "$GITHUB_STEP_SUMMARY"
-          echo "conclusion=$(python3 -c 'import json;print(json.load(open("out/check.json"))["conclusion"])')" >> "$GITHUB_OUTPUT"
+          # What may be done (a fork: nothing but check) is decided in step_flow/github.py, which is tested.
+          python3 -c 'import json;[print(f"{k}={str(v).lower()}") for k, v in json.load(open("out/check.json"))["actions"].items()]' >> "$GITHUB_OUTPUT"
 
       - name: Post or update the one comment
-        if: env.SAME_REPO == 'true'
+        if: steps.render.outputs.comment == 'true'
         run: |
           set -euo pipefail
           id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
@@ -133,7 +147,7 @@ jobs:
           fi
 
       - name: Set the check
-        if: env.SAME_REPO == 'true'
+        if: steps.render.outputs.check == 'true'
         run: |
           set -euo pipefail
           # success = ok, neutral = decide ("needs input"), failure = problems.
@@ -143,5 +157,5 @@ jobs:
             | gh api "repos/$REPO/check-runs" --input - > /dev/null
 
       - name: Fail a fork's PR on problems
-        if: env.SAME_REPO != 'true' && steps.render.outputs.conclusion == 'failure'
+        if: steps.render.outputs.fail_job == 'true'
         run: exit 1
