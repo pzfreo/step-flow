@@ -50,7 +50,7 @@ jobs:
           # The released versions in tools.lock (build123d there is for scenario generation only).
           grep -E '^(specify-core|draftwright)==' tools.lock > "$RUNNER_TEMP/tools.txt"
           "$RUNNER_TEMP/venv/bin/pip" install -r "$RUNNER_TEMP/tools.txt"
-          "$RUNNER_TEMP/venv/bin/pip" install --no-deps .
+          "$RUNNER_TEMP/venv/bin/pip" install --no-deps -e .   # editable: step-flow reads tools.lock from the checkout
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: Run step-flow on each changed part

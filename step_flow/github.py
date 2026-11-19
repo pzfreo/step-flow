@@ -29,11 +29,13 @@ def combine(verdicts):
     return V.worst(verdicts) or V.PROBLEMS
 
 
-def drawing_links(part, repo, base_sha, head_sha, committed, run_url):
+def drawing_links(part, repo, base_sha, head_sha, committed, run_url, has_after=True):
     """Before (main's committed drawing), after and changes. After is the committed file on the PR branch;
     for a fork, which cannot be committed to, the run's artifacts."""
     blob = f"https://github.com/{repo}/blob"
     links = {"before": f"{blob}/{base_sha}/demo/{part}/part.pdf"}
+    if not has_after:
+        return {"before": links["before"]}
     if committed:
         links["after"] = f"{blob}/{head_sha}/demo/{part}/{FILES['after']}"
         links["changes"] = f"{blob}/{head_sha}/demo/{part}/{FILES['changes']}"
@@ -90,7 +92,8 @@ def render_part(part, result, links):
     if skipped:
         out.append("")
     if links:
-        out.append("**Drawings:** " + " · ".join(f"[{k}]({links[k]})" for k in ("before", "after", "changes")))
+        out.append("**Drawings:** " + " · ".join(f"[{k}]({links[k]})" for k in ("before", "after", "changes")
+                                                  if k in links))
         out.append("")
     return "\n".join(out)
 
@@ -128,8 +131,10 @@ def main(argv=None):
     for d in sorted(p for p in root.iterdir() if p.is_dir()):
         vf = d / "verdict.json"
         if vf.exists():
-            links = drawing_links(d.name, a.repo, a.base_sha, a.head_sha, a.committed, a.run_url)
-            parts.append((d.name, json.loads(vf.read_text()), links, ""))
+            result = json.loads(vf.read_text())
+            links = drawing_links(d.name, a.repo, a.base_sha, a.head_sha, a.committed, a.run_url,
+                                  has_after="new_drawing_pdf" in result.get("outputs", {}))
+            parts.append((d.name, result, links, ""))
         else:
             note = (d / "note.txt").read_text().strip() if (d / "note.txt").exists() else "step-flow did not finish."
             parts.append((d.name, None, None, note))
