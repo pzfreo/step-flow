@@ -183,14 +183,22 @@ the run's summary and artifacts, and the job fails on `problems`.
   `demo/<part>/part.accepted.json`, a JSON list such as `["hole.function:holes:7"]`. Being absent from
   `part.answers.json` is not an answer, so a `decide` never turns `ok` because step-flow's own output was
   committed back;
-- a drawing Spec entry that no longer applies: not answerable yet. The Spec is read from the base branch (the
-  before drawing needs it), so an edit to `part.spec.json` on the branch is overwritten by the carried one.
+- a drawing Spec entry that no longer applies: edit `demo/<part>/part.spec.json` on the branch. A Spec on the
+  branch that differs from the base's and from the one the workflow last committed is taken as yours: it replaces
+  the carried Spec, is drawn, and the planner checks it against the new part (a stale entry is a new `decide`).
+  The comment says "the Spec edited on this branch is used".
 
 The next run re-checks: answers on the branch count only when they are stamped for the PR's STEP (they came from
 the last run), they replace the carried ones, and the items they close are listed as "decided" in the comment.
 Everything else is checked again from scratch, so a wrong answer shows up as a new `decide` or `problems`.
 
-A new part (no STEP and answers on the base branch) is reported as not checked.
+A new part (no STEP and answers on the base branch) is a **first build**: nothing is carried, every requirement is
+a question to specify (`decide`), and the part is drawn plain. Commit `part.answers.json` to answer them; the next
+run validates the answers, writes the PMI (never taking defaults), draws with it and commits the results.
+`step-flow first-build NEW.step [--answers A] [--spec S] -o OUT` is the same from the command line.
+
+The bot's own push to the PR branch makes GitHub list one more run as `action_required` (an approval request
+for a run started by the bot); leave it unapproved. The pushed commit is already the one that was checked.
 
 ## Licence
 
