@@ -54,6 +54,10 @@ def stage_diff(r, old, new, answers, out):
         notes.append({"kind": "check", "id": c["id"], "feature": c.get("feature"), "answer": c.get("answer"),
                       "changes": c.get("changes"), "where": "diff/report.json#/check",
                       "what": f"{c['id']} = {c.get('answer')!r} carried to a changed feature; check it still fits"})
+    tie = report.get("frame_tie")
+    if tie:
+        notes.append({"kind": "frame_tie", "alternative": tie.get("alternative"), "where": "diff/report.json#/frame_tie",
+                      "what": "tie broken by the file frame: " + (tie.get("note") or "another placement fits equally")})
     tool_verdict = report.get("verdict")
     verdict = V.worst([tool_verdict, V.item_verdict(items)])
     if verdict != tool_verdict:
@@ -345,6 +349,11 @@ def summary(result):
     if checks:
         lines.append("**To check** (carried to a changed feature):")
         lines += [f"- {n['what']}" for n in checks]
+        lines.append("")
+    ties = [n for s in result["stages"] for n in s.get("notes", []) if n.get("kind") == "frame_tie"]
+    if ties:
+        lines.append("**Stated tie:**")
+        lines += [f"- {n['what']}" for n in ties]
         lines.append("")
     skipped = [s for s in result["stages"] if s.get("skipped")]
     for s in skipped:

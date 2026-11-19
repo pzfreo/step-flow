@@ -38,6 +38,13 @@ def cats(rows, check):
 
 
 class Scoring(unittest.TestCase):
+    def test_stated_tie_required(self):
+        exp = {"verdict": "ok", "stated": ["frame_tie"]}
+        silent = E.score(exp, FakeRun({}))
+        self.assertEqual(cats(silent, "stated"), ["silent-wrong"])
+        said = E.score(exp, FakeRun({}, notes=[{"kind": "frame_tie", "what": "tie broken by the file frame"}]))
+        self.assertEqual(cats(said, "stated"), ["correct-automatic"])
+
     def test_locate(self):
         self.assertEqual(E.locate(ANALYSIS, H6), {2})
         self.assertEqual(E.locate(ANALYSIS, {"plane": {"normal": [0, 0, -1], "through": [0, 0, 0]}}), {1})

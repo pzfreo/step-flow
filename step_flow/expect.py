@@ -278,6 +278,13 @@ def score(expect, run):
         row("noted", what, "correct-automatic" if hits else "silent-wrong",
             ", ".join(n["id"] for n in hits) or "not listed")
 
+    # A tie the tools broke must be stated, not silent.
+    for kind in expect.get("stated", []):
+        what = f"the report states {kind.replace('_', ' ')}"
+        hits = run.notes(kind)
+        row("stated", what, "correct-automatic" if hits else "silent-wrong",
+            "; ".join(n["what"] for n in hits) or "not stated")
+
     # PMI written into the new STEP (the intent Specify wrote).
     for e in expect.get("pmi", []):
         fields = {k: v for k, v in e.items() if k not in ("on", "kind")}

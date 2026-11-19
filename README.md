@@ -54,7 +54,7 @@ Rules, decided for M1:
 - **Lint** ignores `info` and `advisory` findings, and compares by (code, message) with Draftwright feature
   IDs' face numbers blanked (`f:hole:f7` → `f:hole:f#`), since faces renumber on any change; a finding that
   occurs more often than before is new. `draftwright diff`'s own verdict is recorded as a note, not used
-  (it pairs items by face-numbered IDs: FINDINGS.md F3).
+  (it pairs items by face-numbered IDs: FINDINGS.md F3). Specify's `frame_tie` is a note and appears in `summary.md`.
 - `not_written` lines from the write are notes.
 
 Outputs in `OUT/`: `verdict.json` (`overall`, `stages`, `decisions`: every item needing a decision or naming
@@ -133,7 +133,7 @@ same_as_old = true                  # prints exactly what the old drawing printe
 The six M1 scenarios: `reexport` (same geometry, faces reordered: ok), `move` (the Ø8 hole moves: ok),
 `resize` (the Ø6 H7 hole becomes Ø7: ok, H7 carried with Ø7's limits and listed to check, per Specify's
 rule), `add` (a new Ø10 hole: decide), `remove` (the Ø8 hole removed: decide, orphaned requirements named),
-`symmetric` (one of a symmetric pair moves: decide, never a guess; currently fails, FINDINGS.md F1).
+`symmetric` (one of a symmetric pair moves: ok, and the report must state that the file frame broke the tie; FINDINGS.md F1).
 
 ## Licence
 

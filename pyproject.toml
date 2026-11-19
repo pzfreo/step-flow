@@ -5,7 +5,7 @@ description = "A geometry change carried through as a build: STEP -> PMI -> draw
 license = "Apache-2.0"
 requires-python = ">=3.11"
 # Exact pins: tools.lock is the record step-flow checks at run time.
-dependencies = ["specify-core==0.1.18", "draftwright==0.6.0"]
+dependencies = ["specify-core==0.2.0", "draftwright==0.6.1"]
 
 [project.optional-dependencies]
 scenarios = ["build123d==0.13.0"]

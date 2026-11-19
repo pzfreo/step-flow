@@ -2,24 +2,23 @@ name = "symmetric"
 changed = """
 A plate symmetric about its centre: two Ø6 holes at (30, 30) and (70, 30). The one at (30, 30) is datum B
 and Ø6 H7; the other is a plain clearance hole. In v2 the hole at (70, 30) moves to (75, 30). Turned 180°
-about the plate's centre, v1 fits v2 just as well, with the datum hole as the one that moved: the geometry
-cannot say which hole is datum B. The brief's truth: the chain must ask (decide), naming datum B and the
-H7 hole, never pick one silently.
+about the plate's centre, v1 fits v2 just as well, with the datum hole as the one that moved. Paul's
+decision (specify-core 0.2.0, #202): the file frame breaks the tie, the verdict is ok, and the report must
+say the tie was broken by the file frame. A silent ok is silent-wrong.
 """
-verdict = "decide"
+verdict = "ok"
+stated = ["frame_tie"]
 
-[[ask]]
+# By the file frame the datum hole stays at (30, 30) with datum B and H7, and the other hole moved.
+[[carried]]
 question = "datum.B"
+on.hole = { at = [30, 30], d = 6 }
 
-[[ask]]
+[[carried]]
 question = "hole.function"
-revision = "old"
+value = "fit:H7"
 on.hole = { at = [30, 30], d = 6 }
 
 [[carried]]
 question = "datum.A"
 on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
-
-# The tools carry by the file frame instead (FINDINGS.md, F1). Kept as the brief states it; whether the
-# file frame should be allowed to break the tie is a question for Paul, not something to change here.
-findings = ["F1: specify-core diff breaks the symmetric tie by the file frame and says ok (FINDINGS.md)"]

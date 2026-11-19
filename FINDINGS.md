@@ -1,10 +1,17 @@
 # Findings about Specify and Draftwright
 
-What the M1 scenarios showed the released tools do (specify-core 0.1.18, draftwright 0.6.0). None is worked
-around in step-flow, and no expectation was changed to match. Each reproduction runs from the repository
+What the scenarios show the released tools do. Reproduced first on specify-core 0.1.18 / draftwright 0.6.0,
+re-run on **specify-core 0.2.0 / draftwright 0.6.1**; the status line under each heading is for the new
+versions. None is worked around in step-flow, and no expectation was changed to hide a defect. Each reproduction runs from the repository
 root with the pinned venv (`S=.venv/bin/specify-core D=.venv/bin/draftwright`); `out/` is ignored.
 
-## F1. Symmetric part: Specify breaks the tie by the file frame and says `ok` (harness: silent-wrong)
+## F1. Symmetric part: Specify breaks the tie by the file frame and says `ok`
+
+**Status: resolved in specify-core 0.2.0 (#202), scenario truth changed by Paul's decision.** `diff` now
+reports `frame_tie` ("Matched in the file's frame; a 180° turn about Z fits equally."). The truth is `ok`
+with the tie stated; step-flow carries `frame_tie` as a note and `summary.md` lists it under "Stated tie",
+and `expect.toml` requires it (`stated = ["frame_tie"]`), so a silent `ok` still scores silent-wrong. The
+text below is the original 0.1.18 finding.
 
 **Scenario** `scenarios/symmetric`: a 100 × 60 × 10 plate, symmetric about its centre, with Ø6 holes at
 (30, 30) and (70, 30). Datum B and Ø6 H7 are on the hole at (30, 30); the other is a clearance hole. In v2
@@ -31,6 +38,9 @@ scenario's truth changes to `ok` with a note) or Specify reports the tie as ambi
 brief's truth until that is decided, so it fails on this scenario.
 
 ## F2. Specify's PMI change list mis-pairs items after a removal and reuses characteristic numbers
+
+**Status: fixed in 0.2.0 (#202).** The removed hole's items now read "#15 removed: ⌀8 H11", "#16 removed: 80",
+"#17 removed: ⌖ ⌀0.5Ⓜ A B C", and the Ø5 holes' items are "unchanged". Original finding follows.
 
 **Scenario** `scenarios/remove` (the Ø8 hole at (80, 15) removed; the Ø5 pair's faces 8, 9 become 7, 8).
 
@@ -60,6 +70,9 @@ the carried `answers.json` and the written PMI are right (the harness checks bot
 
 ## F3. `draftwright diff` pairs drawing items by face-numbered IDs: false changes and a false `problems`
 
+**Status: still reproduces on draftwright 0.6.1** (verdict `problems`, 12 annotation changes, the added
+problem also listed as resolved; `20 → 30`, `80 → 70`, and the Ø5 locations `removed`). Original finding follows.
+
 **Scenario** `scenarios/reexport` (identical geometry, faces in a different order).
 
 ```sh
@@ -82,6 +95,9 @@ not." The added problem (`gdt_position_changed` for ⌖ ⌀0.2Ⓜ) is also liste
 the same correspondence. step-flow records draftwright's verdict as a note and uses its own lint (below).
 
 ## F4. Holes sharing a coordinate: Draftwright's plan says one dimension serves both, its lint says not located
+
+**Status: still reproduces on draftwright 0.6.1** (`feature_not_located` for the ⌀8 and the other ⌀5 hole on y,
+while both plan dimensions say "one dimension serves every feature at this distance"). Original finding follows.
 
 **Any base-plate scenario's old drawing** (holes at (20, 15) and (80, 15); (30, 45) and (70, 45)):
 

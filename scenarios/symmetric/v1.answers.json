@@ -5,6 +5,62 @@
       "faces": "818c3f6907c33f19ea1488825c035cb124c70066d0ac11e9444d6031351de5b1",
       "schema": 2
     },
+    "sources": {
+      "datum.B.control": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "datums.control.none"
+      },
+      "datum.C.control": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "datums.control.none"
+      },
+      "part.coating": {
+        "kind": "assumption",
+        "refs": [],
+        "rule": "part.coating.none"
+      },
+      "part.edges": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "part.edges.machined"
+      },
+      "part.general_tolerance": {
+        "kind": "convention",
+        "refs": [
+          {
+            "standard": "ISO 2768-1"
+          }
+        ],
+        "rule": "part.general_tolerance.machined"
+      },
+      "part.heat_treatment": {
+        "kind": "assumption",
+        "refs": [],
+        "rule": "part.heat_treatment.none"
+      },
+      "part.locating": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "part.locating.position"
+      },
+      "part.notes": {
+        "kind": "assumption",
+        "refs": [],
+        "rule": "part.notes.none"
+      },
+      "part.process": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "process.material_class"
+      },
+      "part.surface_finish": {
+        "kind": "convention",
+        "refs": [],
+        "rule": "part.surface_finish.machined"
+      }
+    },
     "unresolved": {}
   },
   "datum.A": [
