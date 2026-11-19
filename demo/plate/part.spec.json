@@ -1,18 +1,24 @@
 {
-  "schema": "draftwright.spec/3",
-  "sheet": {
-    "title": {
-      "title": "LOCATING PLATE",
-      "number": "SF-001",
-      "material": "Aluminium 6082-T6"
-    }
+  "binding": {
+    "face_count": 10,
+    "loader": "haecceity via draftwright 0.6.1",
+    "part": "new.pmi",
+    "source_sha256": "9b78453b3b9acfe9de602b9788d3bf127ba065bec0ac5d9d3c44541738c41773"
   },
   "dimensions": {
     "d:f:hole:f8/bore.diameter": {
       "place": {
-        "view": "plan",
-        "side": "above"
+        "side": "above",
+        "view": "plan"
       }
+    }
+  },
+  "schema": "draftwright.spec/3",
+  "sheet": {
+    "title": {
+      "material": "Aluminium 6082-T6",
+      "number": "SF-001",
+      "title": "LOCATING PLATE"
     }
   }
 }
