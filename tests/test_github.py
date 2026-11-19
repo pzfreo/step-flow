@@ -75,6 +75,8 @@ class Render(unittest.TestCase):
         self.assertIn("/blob/H/demo/plate/part.pdf", done["after"])
         fork = G.drawing_links("plate", "o/r", "B", "H", False, "https://run")
         self.assertEqual(fork["after"], "https://run")
+        self.assertEqual(list(G.drawing_links("plate", "o/r", "B", "H", True, "https://run", has_after=False)),
+                         ["before"])
 
 
 class Main(unittest.TestCase):
