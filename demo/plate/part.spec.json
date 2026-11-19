@@ -1,12 +1,12 @@
 {
   "binding": {
-    "face_count": 10,
+    "face_count": 9,
     "loader": "haecceity via draftwright 0.6.1",
     "part": "new.pmi",
-    "source_sha256": "9b78453b3b9acfe9de602b9788d3bf127ba065bec0ac5d9d3c44541738c41773"
+    "source_sha256": "5c2583a8932a00a07f3342fc271396a860fe6cfea020f25bdf60d1d7e2bcf54e"
   },
   "dimensions": {
-    "d:f:hole:f8/bore.diameter": {
+    "d:f:hole:f7/bore.diameter": {
       "place": {
         "side": "above",
         "view": "plan"

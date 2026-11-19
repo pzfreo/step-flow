@@ -11,12 +11,10 @@
   0
  ],
  "datum.C.control": "none",
- "hole.function:hole_patterns.set:8.9": "clearance",
+ "hole.function:hole_patterns.set:7.8": "clearance",
  "hole.function:holes:6": "fit:H7",
- "hole.function:holes:7": "clearance",
- "hole.position:hole_patterns.set:8.9": "0.2",
+ "hole.position:hole_patterns.set:7.8": "0.2",
  "hole.position:holes:6": "0.05",
- "hole.position:holes:7": "0.5",
  "part.coating": "None (as machined)",
  "part.edges": "Break sharp edges 0.2 max",
  "part.general_tolerance": "ISO 2768-m",
@@ -29,8 +27,8 @@
  "_specify": {
   "evidence": {
    "schema": 2,
-   "face_count": 10,
-   "faces": "db85e6f1e5c1276f15eb3d371e9e5ef8967f7af98ab3e4140a0c70a8c1a5ded4"
+   "face_count": 9,
+   "faces": "6b09a6be468457bd19a4a08a20114501a3a105b51b33c6a6f6a4f582a97e49a7"
   },
   "unresolved": {}
  }
