@@ -16,9 +16,24 @@ MARKER = "<!-- step-flow -->"
 ICON = {V.OK: "✅", V.DECIDE: "⚠️", V.PROBLEMS: "❌"}
 # A check run's conclusion for each overall verdict: decide is neutral ("needs input").
 CONCLUSION = {V.OK: "success", V.DECIDE: "neutral", V.PROBLEMS: "failure"}
+CHECK_NAME = "step-flow verdict"  # not the job's own name, `step-flow`
 TITLE = {V.OK: "step-flow: ok", V.DECIDE: "step-flow: needs input", V.PROBLEMS: "step-flow: problems"}
 LIST_SHOWN = 10  # decisions listed before the rest fold away
 FILES = {"after": "part.pdf", "changes": "part.changes.svg"}
+
+
+GENERATED = {"part.pmi.step", "part.pdf", "part.svg", "part.changes.svg"}  # written by the workflow
+
+
+def changed_parts(paths):
+    """The part directories (``demo/<part>``, sorted) a PR changed: any file in one except what the workflow
+    itself generates. A part's answers, Spec or accepted list changing re-runs it, with or without its STEP."""
+    out = set()
+    for p in paths:
+        bits = p.split("/")
+        if len(bits) == 3 and bits[0] == "demo" and bits[2] not in GENERATED:
+            out.add("/".join(bits[:2]))
+    return sorted(out)
 
 
 def conclusion(overall):
@@ -112,6 +127,9 @@ def render_part(part, result, links):
             out.append(f"- decided: {n['what']}")
         if decided:
             out.append("")
+    stale = _notes(result, "answers_stale")
+    for n in stale:
+        out += [f"**Answers not applied:** {n['what']} ({', '.join(f'`{i}`' for i in n['ids'])}).", ""]
     specs = _notes(result, "spec_decided")
     if specs:
         out += ["**Spec:** the Spec edited on this branch is used for the new drawing.", ""]
@@ -160,11 +178,13 @@ def render(parts, how_to=True):
     verdicts, body = [], []
     for name, result, links, note in parts:
         if result is None:
-            body += [f"### `demo/{name}/part.step`: ⏭️ not checked", "", note, ""]
+            # step-flow left no verdict for this part (it crashed or was killed): never a green check.
+            verdicts.append(V.PROBLEMS)
+            body += [f"### `demo/{name}/part.step`: ❌ no verdict", "", note, ""]
             continue
         verdicts.append(result["overall"])
         body.append(render_part(name, result, links))
-    overall = combine(verdicts) if verdicts else V.OK
+    overall = combine(verdicts)
     head = [f"## step-flow: {ICON[overall]} `{overall}`", ""]
     if overall == V.DECIDE and how_to:
         body.append("To answer: edit `part.answers.json` (answer the question), `part.accepted.json` (list a "
@@ -174,7 +194,17 @@ def render(parts, how_to=True):
     return "\n".join(head + body).rstrip() + "\n", overall
 
 
+def parts_main():
+    """NUL-separated changed paths on stdin, NUL-separated part directories on stdout (no word-splitting)."""
+    paths = [p for p in sys.stdin.buffer.read().decode().split("\0") if p]
+    sys.stdout.write("".join(d + "\0" for d in changed_parts(paths)))
+    return 0
+
+
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "parts":
+        return parts_main()
     ap = argparse.ArgumentParser(prog="python -m step_flow.github", description=__doc__)
     ap.add_argument("root")
     ap.add_argument("--repo", required=True)
@@ -198,13 +228,13 @@ def main(argv=None):
         else:
             note = (d / "note.txt").read_text().strip() if (d / "note.txt").exists() else "step-flow did not finish."
             parts.append((d.name, None, None, note))
-    if not parts:
-        print("no parts", file=sys.stderr)
-        return 2
-    markdown, overall = render(parts)
+    if parts:
+        markdown, overall = render(parts)
+    else:  # only generated files changed: nothing to check, and nothing that could be wrong
+        markdown, overall = "## step-flow: nothing to check\n\nNo part's STEP, answers or Spec changed.\n", V.OK
     (root / "comment.md").write_text(MARKER + "\n" + markdown)
     (root / "check.json").write_text(json.dumps({
-        "conclusion": conclusion(overall), "title": TITLE[overall], "summary": markdown,
+        "conclusion": conclusion(overall), "title": TITLE[overall], "summary": markdown, "name": CHECK_NAME,
         "actions": actions(not a.fork, overall)}, ensure_ascii=False))
     print(overall)
     return 0

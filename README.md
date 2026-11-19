@@ -150,7 +150,8 @@ rule), `add` (a new Ø10 hole: decide), `remove` (the Ø8 hole removed: decide, 
 
 ## GitHub flow
 
-`.github/workflows/step-flow.yml` runs step-flow on a pull request that changes anything under `demo/`. A part
+`.github/workflows/step-flow.yml` runs step-flow on a pull request that changes anything under `demo/`: a part is re-run when any of its files
+changes (its STEP, answers, Spec or accepted list), not only its STEP; the files the workflow writes do not count. A part
 is a folder `demo/<part>/` on the base branch:
 
 | File | What it is |
@@ -169,8 +170,15 @@ on the lock), takes the base branch's `part.step`, `part.answers.json` and `part
    run). Merging the PR puts them on main, which is the next change's baseline;
 2. posts **one comment** (updated on every run): the verdict, what changed, what was carried, what needs a
    decision and what to check, with links to the before drawing (main's) and the after and changes drawings;
-3. sets a **check** named `step-flow`: `ok` passes, `decide` is neutral ("needs input", the list is in the
-   check's summary and the comment), `problems` fails. The job's own result only says whether the workflow ran.
+3. sets a **check** named `step-flow verdict` (the job itself is `step-flow`): `ok` passes, `decide` is neutral ("needs input", the list is in the
+   check's summary and the comment), `problems` fails. The job's own result only says whether the workflow ran. A part for which step-flow left no verdict (a crash,
+   a missing `part.step`) is `problems`, never green.
+
+   **Branch protection:** GitHub counts a *neutral* check as passing, so a `decide` does not block a merge by
+   itself. To block until every question is answered, require the `step-flow verdict` check in branch protection
+   (or a ruleset) and have a person or a rule treat neutral as not good enough; GitHub offers no "success only"
+   setting, so the practical way is a required review or a merge queue rule, or changing `CONCLUSION` in
+   `step_flow/github.py` so `decide` maps to `failure`.
 
 Pull requests from forks are checked only: the token cannot push to a fork or comment, so the verdict is in
 the run's summary and artifacts, and the job fails on `problems`.
@@ -183,14 +191,25 @@ the run's summary and artifacts, and the job fails on `problems`.
   `demo/<part>/part.accepted.json`, a JSON list such as `["hole.function:holes:7"]`. Being absent from
   `part.answers.json` is not an answer, so a `decide` never turns `ok` because step-flow's own output was
   committed back;
-- a drawing Spec entry that no longer applies: not answerable yet. The Spec is read from the base branch (the
-  before drawing needs it), so an edit to `part.spec.json` on the branch is overwritten by the carried one.
+- a drawing Spec entry that no longer applies: edit `demo/<part>/part.spec.json` on the branch. A Spec on the
+  branch that differs from the base's and from the one the workflow last committed is taken as yours: it replaces
+  the carried Spec, is drawn, and the planner checks it against the new part (a stale entry is a new `decide`).
+  The comment says "the Spec edited on this branch is used".
+
+If the STEP changes again, answers stamped for the earlier STEP are not applied; the comment lists them under
+"Answers not applied" so they can be given again.
 
 The next run re-checks: answers on the branch count only when they are stamped for the PR's STEP (they came from
 the last run), they replace the carried ones, and the items they close are listed as "decided" in the comment.
 Everything else is checked again from scratch, so a wrong answer shows up as a new `decide` or `problems`.
 
-A new part (no STEP and answers on the base branch) is reported as not checked.
+A new part (no STEP and answers on the base branch) is a **first build**: nothing is carried, every requirement is
+a question to specify (`decide`), and the part is drawn plain. Commit `part.answers.json` to answer them; the next
+run validates the answers, writes the PMI (never taking defaults), draws with it and commits the results.
+`step-flow first-build NEW.step [--answers A] [--spec S] -o OUT` is the same from the command line.
+
+The bot's own push to the PR branch makes GitHub list one more run as `action_required` (an approval request
+for a run started by the bot); leave it unapproved. The pushed commit is already the one that was checked.
 
 ## Licence
 

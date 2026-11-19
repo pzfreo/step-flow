@@ -31,14 +31,16 @@ jobs:
       REPO: ${{ github.repository }}
       PR: ${{ github.event.pull_request.number }}
       BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
       SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The branch itself, not the merge commit, so the results can be committed back to it.
+          # The commit this event is about (not a moving branch name); pushed back to the branch below.
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - run: git cat-file -e "$BASE^{commit}" || git fetch --no-tags "$GITHUB_SERVER_URL/$REPO" "$BASE"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -57,10 +59,12 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p out
-          # Parts changed by the PR: demo/<part>/part.step (the written part.pmi.step is not a source).
-          for step in $(git diff --name-only --diff-filter=AM "$BASE"...HEAD -- 'demo/*/part.step'); do
-            dir=$(dirname "$step"); part=$(basename "$dir"); work="$RUNNER_TEMP/old/$part"; o="out/$part"
+          # Parts changed by the PR: any file in demo/<part>/ except what this workflow writes itself, so a
+          # PR that only answers a question or edits the Spec re-runs the part. NUL-separated, so any name is safe.
+          while IFS= read -r -d '' dir; do
+            part=$(basename "$dir"); step="$dir/part.step"; work="$RUNNER_TEMP/old/$part"; o="out/$part"
             mkdir -p "$work" "$o"
+            if [ ! -f "$step" ]; then echo "$dir has no part.step on this branch." > "$o/note.txt"; continue; fi
             # A person's answers or Spec: the file on the branch, when it differs from the base's.
             # A Spec counts as a person's only if it also differs from the one this workflow last committed.
             person_spec=""
@@ -86,8 +90,8 @@ jobs:
               cmd=(step-flow first-build "${args[@]}")
             fi
             # Exit 1 is "problems", 2 a tool failure: both are in verdict.json, so the job goes on.
-            "${cmd[@]}" || echo "step-flow exited $? for $part"
-          done
+            "${cmd[@]}" < /dev/null || echo "step-flow exited $? for $part"
+          done < <(git diff -z --name-only --diff-filter=ACMRT "$BASE"...HEAD -- demo | python3 -m step_flow.github parts)
           ls out
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -112,6 +116,8 @@ jobs:
             copy draw/new.spec.json part.spec.json
             copy draw/new.pdf part.pdf
             copy draw/new.svg part.svg
+            # No change drawing (a first build) must not leave a stale one from an earlier run.
+            rm -f "$dir/part.changes.svg"
             copy draw/diff/changes.svg part.changes.svg
             git add "$dir"
           done
@@ -119,7 +125,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "step-flow: PMI, answers and drawing for the changed part"
-          git push
+          # The checkout keeps no credentials: pass the token for this one push, to the branch the event is about.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "HEAD:refs/heads/$HEAD_REF"
           echo "committed=true" >> "$GITHUB_OUTPUT"
 
       - name: Render the comment and check
@@ -152,7 +161,7 @@ jobs:
           set -euo pipefail
           # success = ok, neutral = decide ("needs input"), failure = problems.
           jq -n --arg sha "$(git rev-parse HEAD)" --slurpfile c out/check.json '{
-            name: "step-flow", head_sha: $sha, status: "completed", conclusion: $c[0].conclusion,
+            name: $c[0].name, head_sha: $sha, status: "completed", conclusion: $c[0].conclusion,
             output: {title: $c[0].title, summary: $c[0].summary}}' \
             | gh api "repos/$REPO/check-runs" --input - > /dev/null
 

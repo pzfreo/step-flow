@@ -1,5 +1,6 @@
 """The PR comment, check and the resolution of decisions: structure, not text (no tool needed)."""
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,11 +58,15 @@ class Render(unittest.TestCase):
         self.assertEqual(overall, "problems")
         self.assertEqual(sum(1 for l in md.splitlines() if l.startswith("### ")), 2)
 
-    def test_part_without_result_is_named_not_counted(self):
-        md, overall = G.render([("a", result("ok"), LINKS, ""), ("new", None, None, "no baseline on main")])
-        self.assertEqual(overall, "ok")
+    def test_part_without_a_verdict_is_problems(self):
+        # step-flow left no verdict.json (it crashed, was killed, or the part has no STEP): that must never be
+        # a green check. The earlier expectation (ok) was wrong, and combine()'s docstring says so; changed
+        # because the fix requires it.
+        md, overall = G.render([("a", result("ok"), LINKS, ""), ("new", None, None, "step-flow did not finish")])
+        self.assertEqual(overall, "problems")
         self.assertIn("demo/new/part.step", md)
-        self.assertIn("no baseline on main", md)
+        self.assertIn("step-flow did not finish", md)
+        self.assertEqual(G.render([("only", None, None, "x")])[1], "problems")
 
     def test_notes_are_listed_to_check(self):
         note = {"kind": "check", "what": "hole.position:holes:7 carried to a changed feature"}
@@ -126,6 +131,36 @@ class State(unittest.TestCase):
         md, _ = G.render([("new", result("decide", items), LINKS, "")])
         self.assertIn("**Needs a decision** (15):", md)
         self.assertIn("<summary>5 more</summary>", md)
+
+
+class Parts(unittest.TestCase):
+    def test_any_change_in_a_part_dir_selects_it_except_generated_files(self):
+        paths = ["demo/plate/part.answers.json", "demo/plate/part.pdf", "demo/b c/part.spec.json",
+                 "demo/d/part.pmi.step", "demo/d/part.changes.svg", "demo/e/part.step", "README.md",
+                 "demo/stray.txt", "demo/e/nested/part.step"]
+        self.assertEqual(G.changed_parts(paths), ["demo/b c", "demo/e", "demo/plate"])
+
+    def test_names_survive_a_nul_separated_round_trip(self):
+        import io
+        import contextlib
+        stdin = io.TextIOWrapper(io.BytesIO("demo/a b/part.step\0demo/a b/part.pdf\0".encode()))
+        out = io.StringIO()
+        old = sys.stdin
+        sys.stdin = stdin
+        try:
+            with contextlib.redirect_stdout(out):
+                G.main(["parts"])
+        finally:
+            sys.stdin = old
+        self.assertEqual(out.getvalue(), "demo/a b\0")
+
+    def test_the_check_has_its_own_name(self):
+        self.assertNotEqual(G.CHECK_NAME, "step-flow")
+
+    def test_nothing_to_check_is_ok(self):
+        with tempfile.TemporaryDirectory() as t:
+            G.main([t, "--repo", "o/r", "--base-sha", "B", "--head-sha", "H", "--run-url", "u"])
+            self.assertEqual(json.loads((Path(t) / "check.json").read_text())["conclusion"], "success")
 
 
 class Fork(unittest.TestCase):
@@ -216,6 +251,20 @@ class Resolve(unittest.TestCase):
             self.assertEqual([i["id"] for i in st["items"]], ["b"])
             st = P.resolve(self.stage(a), root, None, ["a"])
             self.assertEqual(st["verdict"], "ok")
+
+    def test_answers_stamped_for_an_earlier_step_are_listed_not_applied(self):
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            mine = self.setup(root, {"a": 1, "_specify": {"evidence": {"faces": "new"}}},
+                              {"a": 1, "q1": "x", "q2": "y", "_specify": {"evidence": {"faces": "old"}}})
+            st = P.resolve(self.stage(), root, mine)
+            note = [n for n in st["notes"] if n["kind"] == "answers_stale"][0]
+            self.assertEqual(note["ids"], ["q1", "q2"])
+            self.assertIn("2 answers", note["what"])
+            self.assertNotIn("q1", json.loads((root / "diff" / "answers.json").read_text()))
+            r = result("decide", [ITEM], [note])
+            md, _ = G.render([("plate", r, LINKS, "")])
+            self.assertIn("**Answers not applied:**", md)
 
     def test_absence_closes_nothing(self):
         a = {"kind": "requirement_orphaned", "id": "a", "needs": "decide", "what": "w", "where": "x"}
