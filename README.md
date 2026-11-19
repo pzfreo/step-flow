@@ -150,7 +150,8 @@ rule), `add` (a new Ø10 hole: decide), `remove` (the Ø8 hole removed: decide, 
 
 ## GitHub flow
 
-`.github/workflows/step-flow.yml` runs step-flow on a pull request that changes anything under `demo/`. A part
+`.github/workflows/step-flow.yml` runs step-flow on a pull request that changes anything under `demo/`: a part is re-run when any of its files
+changes (its STEP, answers, Spec or accepted list), not only its STEP; the files the workflow writes do not count. A part
 is a folder `demo/<part>/` on the base branch:
 
 | File | What it is |
@@ -169,8 +170,15 @@ on the lock), takes the base branch's `part.step`, `part.answers.json` and `part
    run). Merging the PR puts them on main, which is the next change's baseline;
 2. posts **one comment** (updated on every run): the verdict, what changed, what was carried, what needs a
    decision and what to check, with links to the before drawing (main's) and the after and changes drawings;
-3. sets a **check** named `step-flow`: `ok` passes, `decide` is neutral ("needs input", the list is in the
-   check's summary and the comment), `problems` fails. The job's own result only says whether the workflow ran.
+3. sets a **check** named `step-flow verdict` (the job itself is `step-flow`): `ok` passes, `decide` is neutral ("needs input", the list is in the
+   check's summary and the comment), `problems` fails. The job's own result only says whether the workflow ran. A part for which step-flow left no verdict (a crash,
+   a missing `part.step`) is `problems`, never green.
+
+   **Branch protection:** GitHub counts a *neutral* check as passing, so a `decide` does not block a merge by
+   itself. To block until every question is answered, require the `step-flow verdict` check in branch protection
+   (or a ruleset) and have a person or a rule treat neutral as not good enough; GitHub offers no "success only"
+   setting, so the practical way is a required review or a merge queue rule, or changing `CONCLUSION` in
+   `step_flow/github.py` so `decide` maps to `failure`.
 
 Pull requests from forks are checked only: the token cannot push to a fork or comment, so the verdict is in
 the run's summary and artifacts, and the job fails on `problems`.
@@ -187,6 +195,9 @@ the run's summary and artifacts, and the job fails on `problems`.
   branch that differs from the base's and from the one the workflow last committed is taken as yours: it replaces
   the carried Spec, is drawn, and the planner checks it against the new part (a stale entry is a new `decide`).
   The comment says "the Spec edited on this branch is used".
+
+If the STEP changes again, answers stamped for the earlier STEP are not applied; the comment lists them under
+"Answers not applied" so they can be given again.
 
 The next run re-checks: answers on the branch count only when they are stamped for the PR's STEP (they came from
 the last run), they replace the carried ones, and the items they close are listed as "decided" in the comment.

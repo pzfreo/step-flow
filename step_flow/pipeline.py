@@ -82,7 +82,7 @@ def resolve(stage, out, person_answers=None, accepted=()):
     The carried file is kept as ``diff/carried.answers.json``. Nothing is closed by being absent: a person must
     answer or list the id, so committing step-flow's own output back never turns a ``decide`` into ``ok``.
     """
-    closed = {}
+    closed, stale = {}, []
     carried_path = out / "diff" / "answers.json"
     if person_answers:
         carried, mine = load_json(carried_path), load_json(person_answers)
@@ -96,11 +96,20 @@ def resolve(stage, out, person_answers=None, accepted=()):
             for k in [k for k in unresolved if k in closed]:
                 del unresolved[k]
             dump_json(carried, carried_path)
+        else:
+            # Stamped for an earlier STEP (the geometry changed again): not applied, and said so.
+            stale = sorted(k for k, v in mine.items() if not k.startswith("_") and carried.get(k) != v)
     for a in accepted:
         closed.setdefault(a, "accepted in accepted.json")
+    notes = list(stage["notes"])
+    if stale:
+        notes.append({"kind": "answers_stale", "ids": stale, "where": "part.answers.json",
+                      "what": f"{len(stale)} answers given for the previous STEP weren't applied; "
+                              "re-answer against this one"})
+        stage = dict(stage, notes=notes)
     if not closed:
         return stage
-    kept, notes = [], list(stage["notes"])
+    kept = []
     for i in stage["items"]:
         if i.get("kind", "").startswith(("requirement_", "carry_blocked")) and i.get("id") in closed:
             notes.append({"kind": "decided", "id": i["id"], "what": f"{i['what']} -- {closed[i['id']]}",
