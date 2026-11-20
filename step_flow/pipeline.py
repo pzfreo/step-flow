@@ -6,6 +6,7 @@ guessed: the PMI write never takes defaults (P4), and anything a tool leaves ope
 
 import json
 import re
+import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -66,6 +67,57 @@ def stage_diff(r, old, new, answers, out):
         notes.append({"kind": "verdict_disagrees", "what": f"specify-core said {tool_verdict}, its items say {verdict}"})
     return V.stage("diff", verdict, items, notes, tool_verdict=tool_verdict, summary=report.get("summary"),
                    features=report.get("features", []), migrated=report.get("migrated", [])), report
+
+
+# --- answering a decision -----------------------------------------------------------------------
+
+def resolve(stage, out, person_answers=None, accepted=()):
+    """Apply what a person decided to the diff stage, so the next run re-checks it.
+
+    - ``person_answers``: an answers file edited in the PR. It counts only when it is stamped for the new
+      revision (its ``_specify.evidence`` equals the carried answers'), i.e. it is the file step-flow committed
+      back, not main's. Its answers replace the carried ones; an item about a question it now answers is closed.
+    - ``accepted``: requirement ids the person has accepted as dropped (an orphaned requirement); closed.
+
+    The carried file is kept as ``diff/carried.answers.json``. Nothing is closed by being absent: a person must
+    answer or list the id, so committing step-flow's own output back never turns a ``decide`` into ``ok``.
+    """
+    closed, stale = {}, []
+    carried_path = out / "diff" / "answers.json"
+    if person_answers:
+        carried, mine = load_json(carried_path), load_json(person_answers)
+        if carried.get("_specify", {}).get("evidence") == mine.get("_specify", {}).get("evidence"):
+            dump_json(carried, out / "diff" / "carried.answers.json")
+            for k, v in mine.items():
+                if not k.startswith("_") and carried.get(k) != v:
+                    carried[k] = v
+                    closed[k] = "answered in answers.json"
+            unresolved = carried.get("_specify", {}).get("unresolved", {})
+            for k in [k for k in unresolved if k in closed]:
+                del unresolved[k]
+            dump_json(carried, carried_path)
+        else:
+            # Stamped for an earlier STEP (the geometry changed again): not applied, and said so.
+            stale = sorted(k for k, v in mine.items() if not k.startswith("_") and carried.get(k) != v)
+    for a in accepted:
+        closed.setdefault(a, "accepted in accepted.json")
+    notes = list(stage["notes"])
+    if stale:
+        notes.append({"kind": "answers_stale", "ids": stale, "where": "part.answers.json",
+                      "what": f"{len(stale)} answers given for the previous STEP weren't applied; "
+                              "re-answer against this one"})
+        stage = dict(stage, notes=notes)
+    if not closed:
+        return stage
+    kept = []
+    for i in stage["items"]:
+        if i.get("kind", "").startswith(("requirement_", "carry_blocked")) and i.get("id") in closed:
+            notes.append({"kind": "decided", "id": i["id"], "what": f"{i['what']} -- {closed[i['id']]}",
+                          "where": i["where"]})
+        else:
+            kept.append(i)
+    stage = dict(stage, items=kept, notes=notes, verdict=V.item_verdict(kept))
+    return stage
 
 
 # --- 2. validate ---------------------------------------------------------------------------------
@@ -151,7 +203,10 @@ def stage_write(r, old, old_answers, new, out):
     items, notes = [], []
     # The old revision is written from its own answers for the "before" drawing. Its answers are source,
     # so a refusal here is a problem with the source, not a decision about the change.
-    log, old_report = write_one(r, old, old_answers, d, "old")
+    if old is None:  # a first build has no old revision
+        old_report = True
+    else:
+        log, old_report = write_one(r, old, old_answers, d, "old")
     if old_report is None:
         items.append({"kind": "old_write_failed", "id": "old", "needs": V.PROBLEMS, "where": "commands.json",
                       "what": f"the old revision's answers do not write: {log['stderr']}"})
@@ -199,7 +254,7 @@ def _draw_one(r, step, spec, d, stem):
     return ok
 
 
-def stage_draw(r, spec, out):
+def stage_draw(r, spec, out, new_spec=None):
     d = out / "draw"
     d.mkdir(parents=True, exist_ok=True)
     w = out / "write"
@@ -212,7 +267,12 @@ def stage_draw(r, spec, out):
         items.append(_tool_failure(r, "draftwright diff failed"))
         return V.stage("draw", V.PROBLEMS, items, notes)
     report = load_json(d / "diff" / "report.json")
-    for e in report.get("spec", []):
+    if new_spec:
+        # A person edited the Spec for the new revision: it replaces the carried one, and the planner checks
+        # it against the new part (the stale-edit codes below), so Specify's carry items no longer apply.
+        notes.append({"kind": "spec_decided", "what": "the Spec edited on the branch is used for the new drawing",
+                      "where": "part.spec.json"})
+    for e in [] if new_spec else report.get("spec", []):
         if e.get("class") not in SPEC_CARRIED:
             items.append({"kind": "stale_spec_edit", "id": e.get("path"), "needs": V.DECIDE,
                           "what": f"Spec entry {e.get('path')} is {e.get('class')}: {e.get('reason') or e.get('entry')}",
@@ -220,7 +280,8 @@ def stage_draw(r, spec, out):
         else:
             notes.append({"kind": "spec_carried", "what": f"{e.get('path')} {e.get('class')}"
                           + (f" to {e['to']}" if e.get("to") else ""), "where": "draw/diff/report.json#/spec"})
-    carried_spec = d / "diff" / "spec.json"
+    carried_spec = Path(new_spec) if new_spec else d / "diff" / "spec.json"
+    shutil.copyfile(carried_spec, d / "new.spec.json")
     if not _draw_one(r, w / "new.pmi.step", carried_spec, d, "new"):
         items.append(_tool_failure(r, "drawing the new revision failed"))
     else:
@@ -292,7 +353,8 @@ def stage_lint(out):
 
 # --- the chain -----------------------------------------------------------------------------------
 
-def run(old, new, answers, out, spec=None, allow_unpinned=False):
+def run(old, new, answers, out, spec=None, allow_unpinned=False, person_answers=None, accepted=None,
+        new_spec=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     old, new, answers = Path(old).resolve(), Path(new).resolve(), Path(answers).resolve()
@@ -302,6 +364,8 @@ def run(old, new, answers, out, spec=None, allow_unpinned=False):
     try:
         tools = check_versions(allow_unpinned)
         st, report = stage_diff(r, old, new, answers, out)
+        if report is not None:
+            st = resolve(st, out, person_answers, load_json(accepted) if accepted else ())
         stages.append(st)
         if report is None:
             stages += [V.skipped(s, "the diff failed") for s in ("validate", "write", "draw", "lint")]
@@ -313,7 +377,7 @@ def run(old, new, answers, out, spec=None, allow_unpinned=False):
                 why = "the PMI write stopped" if not st["written"] else "the old revision did not write"
                 stages += [V.skipped("draw", why), V.skipped("lint", why)]
             else:
-                st = stage_draw(r, spec, out)
+                st = stage_draw(r, spec, out, Path(new_spec).resolve() if new_spec else None)
                 stages.append(st)
                 if (out / "draw" / "new.review.json").exists() and (out / "draw" / "old.review.json").exists():
                     lint = stage_lint(out)
@@ -351,13 +415,65 @@ def run(old, new, answers, out, spec=None, allow_unpinned=False):
     return result
 
 
+def first_build(new, out, answers=None, spec=None, allow_unpinned=False):
+    """A part with no revision to carry from: nothing is carried, every requirement is to be specified.
+
+    Validates ``answers`` (none = empty) against the part, writes the PMI without taking defaults, and draws
+    the part: with its PMI when it was written, plain when it could not be. Verdict ``decide`` while any
+    question is open."""
+    out = Path(out)
+    (out / "diff").mkdir(parents=True, exist_ok=True)
+    new = Path(new).resolve()
+    answers = Path(answers).resolve() if answers else None
+    spec = Path(spec).resolve() if spec else None
+    r = Runner()
+    stages = [V.skipped("diff", "first build: no earlier revision to carry requirements from")]
+    try:
+        tools = check_versions(allow_unpinned)
+        carried = out / "diff" / "answers.json"
+        if answers:
+            shutil.copyfile(answers, carried)
+        else:
+            carried.write_text("{}\n")
+        stages.append(stage_validate(r, new, out))
+        st = stage_write(r, None, None, new, out)
+        stages.append(st)
+        d = out / "draw"
+        d.mkdir(parents=True, exist_ok=True)
+        drawn = out / "write" / "new.pmi.step" if st["written"] else new
+        items = []
+        if not _draw_one(r, drawn, spec, d, "new"):
+            items.append(_tool_failure(r, "drawing the part failed"))
+        stages.append(V.stage("draw", V.item_verdict(items), items,
+                              [] if st["written"] else [{"kind": "plain_drawing",
+                                                         "what": "drawn without PMI: the requirements are not answered yet"}]))
+        stages.append(V.skipped("lint", "first build: no earlier drawing to compare with"))
+    except ToolError as e:
+        tools = None
+        stages.append(V.stage("setup", V.PROBLEMS, [{"kind": "tool_failure", "id": "tools", "needs": V.PROBLEMS,
+                                                     "what": str(e), "where": "tools.lock"}]))
+    except Exception as e:  # noqa: BLE001
+        tools = None
+        stages.append(V.stage("crash", V.PROBLEMS, [{
+            "kind": "tool_failure", "id": "step-flow", "needs": V.PROBLEMS, "where": "commands.json",
+            "what": f"step-flow crashed: {type(e).__name__}: {e}"}]))
+    result = {"schema": "step-flow.verdict/1", "mode": "first_build", "overall": V.overall(stages),
+              "inputs": {"new": str(new), "answers": str(answers) if answers else None,
+                         "spec": str(spec) if spec else None},
+              "tools": tools, "stages": stages, "decisions": V.decisions(stages), "outputs": _outputs(out)}
+    dump_json(result, out / "verdict.json")
+    dump_json(r.log, out / "commands.json")
+    (out / "summary.md").write_text(summary(result))
+    return result
+
+
 def _outputs(out):
     names = {
         "diff_report": "diff/report.json", "diff_markdown": "diff/report.md", "carried_answers": "diff/answers.json",
         "new_pmi_step": "write/new.pmi.step", "new_intent": "write/new.intent.json",
         "old_drawing": "draw/old.svg", "new_drawing": "draw/new.svg",
         "old_drawing_pdf": "draw/old.pdf", "new_drawing_pdf": "draw/new.pdf",
-        "carried_spec": "draw/diff/spec.json", "drawing_changes": "draw/diff/changes.svg",
+        "carried_spec": "draw/new.spec.json", "drawing_changes": "draw/diff/changes.svg",
     }
     return {k: v for k, v in names.items() if (out / v).exists()}
 
