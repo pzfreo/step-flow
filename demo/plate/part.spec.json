@@ -1,0 +1,24 @@
+{
+  "binding": {
+    "face_count": 9,
+    "loader": "haecceity via draftwright 0.6.1",
+    "part": "new.pmi",
+    "source_sha256": "5c2583a8932a00a07f3342fc271396a860fe6cfea020f25bdf60d1d7e2bcf54e"
+  },
+  "dimensions": {
+    "d:f:hole:f7/bore.diameter": {
+      "place": {
+        "side": "above",
+        "view": "plan"
+      }
+    }
+  },
+  "schema": "draftwright.spec/3",
+  "sheet": {
+    "title": {
+      "material": "Aluminium 6082-T6",
+      "number": "SF-001",
+      "title": "LOCATING PLATE REV B"
+    }
+  }
+}

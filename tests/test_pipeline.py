@@ -80,5 +80,50 @@ class NoSpec(unittest.TestCase):
             self.assertTrue((Path(tmp) / "draw/new.svg").exists())
 
 
+class FirstBuild(unittest.TestCase):
+    def setUp(self):
+        try:
+            check_versions()
+        except ToolError:
+            self.skipTest("pinned tools not installed")
+
+    def test_no_answers_asks_for_every_requirement_and_still_draws(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = P.first_build(ROOT / "scenarios/move/v1.step", tmp)
+            stages = {s["stage"]: s for s in result["stages"]}
+            self.assertEqual(result["overall"], "decide")
+            self.assertTrue(stages["diff"]["skipped"])
+            self.assertTrue(any(i["kind"] == "open_question" for i in stages["validate"]["items"]))
+            self.assertIn("new_drawing_pdf", result["outputs"])
+            self.assertNotIn("new_pmi_step", result["outputs"])  # nothing answered, nothing written
+
+    def test_complete_answers_write_the_pmi(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = ROOT / "scenarios/move"
+            result = P.first_build(s / "v1.step", tmp, answers=s / "v1.answers.json", spec=s / "part.spec.json")
+            self.assertEqual(result["overall"], "ok")
+            self.assertIn("new_pmi_step", result["outputs"])
+
+
+class PersonSpec(unittest.TestCase):
+    def test_spec_edited_on_the_branch_is_the_one_drawn(self):
+        try:
+            check_versions()
+        except ToolError:
+            self.skipTest("pinned tools not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            s = ROOT / "scenarios/move"
+            mine = Path(tmp) / "mine.json"
+            spec = json.loads((s / "part.spec.json").read_text())
+            spec["sheet"]["title"]["title"] = "EDITED TITLE"
+            mine.write_text(json.dumps(spec))
+            result = P.run(s / "v1.step", s / "v2.step", s / "v1.answers.json", Path(tmp) / "o",
+                           spec=s / "part.spec.json", new_spec=mine)
+            self.assertEqual(result["overall"], "ok")
+            self.assertIn("EDITED TITLE", (Path(tmp) / "o/draw/new.svg").read_text())
+            self.assertEqual(json.loads((Path(tmp) / "o/draw/new.spec.json").read_text()), spec)
+            self.assertNotIn("EDITED TITLE", (Path(tmp) / "o/draw/old.svg").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

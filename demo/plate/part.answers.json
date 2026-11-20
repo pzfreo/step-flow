@@ -1,0 +1,35 @@
+{
+  "datum.A": [
+    4
+  ],
+  "datum.A.flatness": "0.05",
+  "datum.B": [
+    1
+  ],
+  "datum.B.control": "none",
+  "datum.C": [
+    0
+  ],
+  "datum.C.control": "none",
+  "hole.function:hole_patterns.set:7.8": "clearance",
+  "hole.function:holes:6": "fit:H7",
+  "hole.position:hole_patterns.set:7.8": "0.2",
+  "hole.position:holes:6": "0.05",
+  "part.coating": "None (as machined)",
+  "part.edges": "Break sharp edges 0.2 max",
+  "part.general_tolerance": "ISO 2768-m",
+  "part.heat_treatment": "None",
+  "part.locating": "position tolerances",
+  "part.material": "Aluminium 6082-T6",
+  "part.notes": [],
+  "part.process": "machined",
+  "part.surface_finish": "Ra 3.2",
+  "_specify": {
+    "evidence": {
+      "schema": 2,
+      "face_count": 9,
+      "faces": "6b09a6be468457bd19a4a08a20114501a3a105b51b33c6a6f6a4f582a97e49a7"
+    },
+    "unresolved": {}
+  }
+}
