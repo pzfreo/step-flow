@@ -1,0 +1,6 @@
+# Released tool versions step-flow is pinned to. step-flow checks the installed versions against these
+# before it runs and refuses a mismatch (pass --allow-unpinned to try other versions on purpose).
+specify-core==0.2.0
+draftwright==0.6.1
+# Scenario generation only (scenarios/*/build.py); the committed STEP files do not need it.
+build123d==0.13.0

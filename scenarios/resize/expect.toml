@@ -1,0 +1,78 @@
+name = "resize"
+changed = """
+The fitted hole at (20, 15) goes from Ø6 to Ø7. Specify's rule (docs/diff.md, "Requirements to check"):
+a requirement on a resized feature is carried and applied, and listed to check, because a fit chosen for
+the old size may be wrong for the new one; the verdict stays ok. The answer is the fit class (fit:H7), so
+the PMI becomes Ø7 H7 with Ø7's ISO 286 limits (+0.015/0; Ø6 H7 was +0.012/0). The drawing must print
+⌀7 H7, never the old ⌀6 H7.
+"""
+verdict = "ok"
+
+# The datums stay on their faces: A the bottom, B the front (y = 0), C the left end (x = 0).
+[[carried]]
+question = "datum.A"
+on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
+
+[[carried]]
+question = "datum.B"
+on.plane = { normal = [0, -1, 0], through = [0, 0, 0] }
+
+[[carried]]
+question = "datum.C"
+on.plane = { normal = [-1, 0, 0], through = [0, 0, 0] }
+
+[[carried]]
+question = "part.general_tolerance"
+value = "ISO 2768-m"
+
+[[carried]]
+question = "part.material"
+value = "Aluminium 6082-T6"
+
+[[carried]]
+question = "hole.function"
+value = "fit:H7"
+on.hole = { at = [20, 15], d = 7 }
+
+[[carried]]
+question = "hole.position"
+value = "0.05"
+on.hole = { at = [20, 15], d = 7 }
+
+[[carried]]
+question = "hole.function"
+value = "clearance"
+on.hole = { at = [80, 15], d = 8 }
+
+[[carried]]
+question = "hole.position"
+value = "0.5"
+on.hole = { at = [80, 15], d = 8 }
+
+[[carried]]
+question = "hole.function"
+value = "clearance"
+on.holes = [{ at = [30, 45], d = 5 }, { at = [70, 45], d = 5 }]
+
+[[carried]]
+question = "hole.position"
+value = "0.2"
+on.holes = [{ at = [30, 45], d = 5 }, { at = [70, 45], d = 5 }]
+
+[[noted]]
+question = "hole.function"
+on.hole = { at = [20, 15], d = 7 }
+
+[[pmi]]
+kind = "size"
+fit = "H7"
+nominal = 7
+upper = 0.015
+lower = 0
+on.hole = { at = [20, 15], d = 7 }
+
+[drawing]
+# The Spec's judgement (the pair's callout placed above the plan view) must follow the pair.
+spec_edits = ["2× ⌀5 H11 THRU"]
+prints = ["⌀7 H7 THRU", "⌖ | ⌀0.05 | A | B | C"]
+absent = ["⌀6 H7 THRU"]

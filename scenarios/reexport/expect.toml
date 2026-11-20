@@ -1,0 +1,81 @@
+name = "reexport"
+changed = """
+Nothing, geometrically: v2 is the same plate built from a sketch and an extrusion, so the same faces come
+in a different order (Specify numbers them 0-9 differently). Every requirement must stay on its feature
+and the drawing must print the same values.
+"""
+verdict = "ok"
+
+# The datums stay on their faces: A the bottom, B the front (y = 0), C the left end (x = 0).
+[[carried]]
+question = "datum.A"
+on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
+
+[[carried]]
+question = "datum.B"
+on.plane = { normal = [0, -1, 0], through = [0, 0, 0] }
+
+[[carried]]
+question = "datum.C"
+on.plane = { normal = [-1, 0, 0], through = [0, 0, 0] }
+
+[[carried]]
+question = "part.general_tolerance"
+value = "ISO 2768-m"
+
+[[carried]]
+question = "part.material"
+value = "Aluminium 6082-T6"
+
+[[carried]]
+question = "hole.function"
+value = "fit:H7"
+on.hole = { at = [20, 15], d = 6 }
+
+[[carried]]
+question = "hole.position"
+value = "0.05"
+on.hole = { at = [20, 15], d = 6 }
+
+[[carried]]
+question = "hole.function"
+value = "clearance"
+on.hole = { at = [80, 15], d = 8 }
+
+[[carried]]
+question = "hole.position"
+value = "0.5"
+on.hole = { at = [80, 15], d = 8 }
+
+[[carried]]
+question = "hole.function"
+value = "clearance"
+on.holes = [{ at = [30, 45], d = 5 }, { at = [70, 45], d = 5 }]
+
+[[carried]]
+question = "hole.position"
+value = "0.2"
+on.holes = [{ at = [30, 45], d = 5 }, { at = [70, 45], d = 5 }]
+
+[[pmi]]
+kind = "size"
+fit = "H7"
+nominal = 6
+on.hole = { at = [20, 15], d = 6 }
+
+[[pmi]]
+kind = "position"
+tolerance = 0.05
+on.hole = { at = [20, 15], d = 6 }
+
+[[pmi]]
+kind = "datum"
+letter = "A"
+on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
+
+[drawing]
+# The Spec's judgement (the pair's callout placed above the plan view) must follow the pair.
+spec_edits = ["2× ⌀5 H11 THRU"]
+same_as_old = true
+
+findings = ["F3 (draftwright #539): draftwright diff says problems and 12 changed values for identical geometry (FINDINGS.md)"]

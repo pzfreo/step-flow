@@ -1,0 +1,68 @@
+name = "symmetric"
+changed = """
+A plate symmetric about its centre: two Ø6 holes at (30, 30) and (70, 30). The one at (30, 30) is datum B
+and Ø6 H7; the other is a plain clearance hole. In v2 the hole at (70, 30) moves to (75, 30). Turned 180°
+about the plate's centre, v1 fits v2 just as well, with the datum hole as the one that moved. Paul's
+decision (specify-core 0.2.0, #202): the file frame breaks the tie, the verdict is ok, and the report must
+say the tie was broken by the file frame. A silent ok is silent-wrong. A wrong 180° pairing would also put
+H7 on the moved hole and H11 on the datum hole, so the expectations pin both.
+"""
+verdict = "ok"
+stated = ["frame_tie"]
+
+# By the file frame the datum hole stays at (30, 30) with datum B and H7, and the other hole moved.
+[[carried]]
+question = "datum.B"
+on.hole = { at = [30, 30], d = 6 }
+
+[[carried]]
+question = "hole.function"
+value = "fit:H7"
+on.hole = { at = [30, 30], d = 6 }
+
+[[carried]]
+question = "hole.function"
+value = "clearance"
+on.holes = [{ at = [30, 30], d = 6 }, { at = [75, 30], d = 6 }]
+
+[[carried]]
+question = "hole.position"
+value = "0.1"
+on.holes = [{ at = [30, 30], d = 6 }, { at = [75, 30], d = 6 }]
+
+[[carried]]
+question = "datum.A"
+on.plane = { normal = [0, 0, -1], through = [0, 0, 0] }
+
+# The wrong pairing (turned 180 degrees) would swap them.
+[[not_carried]]
+question = "hole.function"
+value = "fit:H7"
+not_on = { hole = { at = [75, 30], d = 6 } }
+
+[[not_carried]]
+question = "hole.function"
+value = "clearance"
+not_on = { hole = { at = [30, 30], d = 6 } }
+
+# The moved hole's requirements (Specify carries them as the pair's) are listed to check.
+[[noted]]
+question = "hole.function"
+on.holes = [{ at = [30, 30], d = 6 }, { at = [75, 30], d = 6 }]
+
+[[noted]]
+question = "hole.position"
+on.holes = [{ at = [30, 30], d = 6 }, { at = [75, 30], d = 6 }]
+
+[[pmi]]
+kind = "size"
+fit = "H7"
+on.hole = { at = [30, 30], d = 6 }
+
+[[pmi]]
+kind = "size"
+fit = "H11"
+on.hole = { at = [75, 30], d = 6 }
+
+[drawing]
+prints = ["⌀6 H7 THRU", "⌀6 H11 THRU"]
